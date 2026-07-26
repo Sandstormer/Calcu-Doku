@@ -1,7 +1,7 @@
 /* style.css */
 body {
   background-color: #0E0C0F;
-  color: #ffffff;
+  color: #000000;
   font-family: Arial, Helvetica, sans-serif, sans-serif;
   font-size: 16px;
   margin: 0px;
@@ -22,8 +22,8 @@ div {
 }
 #board-container {
   min-width: 400px;
-  height: min(85vh, 85vw);
-  aspect-ratio: 1/1;
+  height: var(--board-size);
+  width: var(--board-size);
   background-color: #E0E0E0;
   border: 6px solid black;
   display: flex;
@@ -32,12 +32,13 @@ div {
 }
 .row {
   display: flex;
+  flex: 0 0 var(--row-size);
   margin: -2px;
   gap: 2px;
 }
 .cell {
-  flex: 1;
   display: flex;
+  flex: 0 0 var(--cell-size);
   position: relative;
   border: 6px solid black;
   border-radius: 4px;
@@ -73,23 +74,15 @@ div {
 /* Cell faint borders */
 .no-top {
   border-top-color: rgba(0,0,0,0);
-  /* padding-top: 4px;
-  margin-top: 0px; */
 }
 .no-right {
   border-right-color: rgba(0,0,0,0);
-  /* padding-right: 4px;
-  margin-right: 0px; */
 }
 .no-bot {
   border-bottom-color: rgba(0,0,0,0);
-  /* padding-bottom: 4px;
-  margin-bottom: 0px; */
 }
 .no-left {
   border-left-color: rgba(0,0,0,0);
-  /* padding-left: 4px;
-  margin-left: 0px; */
 }
 
 /* Header */

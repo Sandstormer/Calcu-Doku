@@ -11,6 +11,14 @@ const getRandom = initializePRNG(getDailySeed()); // Daily seed
 // const getRandom = initializePRNG(Date.now()); // Variable seed
 generateBoard(boardSize);
 
+function benchmark(amount, boardSize) {
+  const startBenchTime = Date.now();
+  for (let i = 0; i < amount; i++) {
+    generateBoard(boardSize);
+  }  
+  console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms");
+}
+
 function generateBoard(boardSize, difficultyFactor = 0.5) {
   if (boardSize < 3 || boardSize > 9) {
     console.log("Invalid board size: Must be between 3 and 9.");
@@ -20,7 +28,14 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
   let failedGeneration = false;
+  const startTime = Date.now();
   assignNumbers();
+
+  // Set dimensions of everything to be integers, to prevent subpixel rounding
+  const cellDimensions = ~~((Math.min(window.innerHeight,window.innerWidth)*0.85)/boardSize)-4;
+  document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
+  document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
+  document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
 
   function assignNumbers() {
     const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
@@ -28,8 +43,8 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
       const newRow = document.createElement('div'); 
       newRow.className = 'row';
       boardContainer.appendChild(newRow);
-      let retryCount = 0;
-      for (let j = 0; j < boardSize && retryCount < 1000; j++) {
+      let rowAssignRetryCount = 0;
+      for (let j = 0; j < boardSize && rowAssignRetryCount < 1000; j++) {
         const newCell = document.createElement('div'); 
         newCell.className = 'cell';
         newCell.row = i;
@@ -41,15 +56,15 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
         // Assign the value of the cell (will be hidden after)
         numsToGive = allNumsToGive.filter(thisNum => !cells.some(cell => (cell.row==i || cell.col==j) && cell.value==thisNum));
         if (numsToGive.length == 0) { // If there are no valid numbers to place, delete the row and try again
-          console.log("Had to retry assigning numbers to row")
           newRow.innerHTML = '';
           while (j > 0) { // Remove all cells in the row
             cells.pop()
             j--;
           }
           j = -1;
-          retryCount++;
-          continue // Restart the row from column 0
+          rowAssignRetryCount++;
+          console.log(`Retried assigning numbers to row. Attempt ${rowAssignRetryCount}.`);
+          continue; // Restart the row from column 0
         }
         newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
         newCell.answer = newCell.value;
@@ -172,6 +187,7 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
 
   // Draw the group borders
   cells.forEach((thisCell, i) => {
+    thisCell.classList = "cell";
     if (thisCell.row != 0           && cells[i-boardSize].group == thisCell.group) thisCell.classList.add("no-top");
     if (thisCell.row != boardSize-1 && cells[i+boardSize].group == thisCell.group) thisCell.classList.add("no-bot");
     if (thisCell.col != 0           && cells[i-1].group == thisCell.group)         thisCell.classList.add("no-left");
@@ -179,10 +195,11 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
     cells.filter(c => c.group === thisCell.group)[0].isLeader = true;
   });
   
-  // Assign the operators
+  // Assign the operators to each group
+  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
   cells.forEach(thisCell => {
     if (thisCell.operator == -1) {
-      const groupSize = cells.filter(cell => cell.group === thisCell.group).length;
+      const groupSize = cells.filter(c => c.group === thisCell.group).length;
       if (groupSize == 1) {
         thisCell.operator = 0;
       } else if (groupSize == 2) {
@@ -195,35 +212,35 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
         }
       } 
       if (thisCell.operator == -1) { // For larger groups, or if smaller groups didn't assign yet
-        if (getRandom() < 0.6) {
-          thisCell.operator = 1; // Set to add
-        } else {
+        if (getRandom() < 0.4 && cellsByGroup[thisCell.group].reduce((total, c) => total * c.value, 1) < 300) {
           thisCell.operator = 2; // Set to multiply
+        } else {
+          thisCell.operator = 1; // Set to add
         }
       }
-      cells.forEach(partnerCell => {
-        if (partnerCell.group == thisCell.group) partnerCell.operator = thisCell.operator;
-      });
+      // Assign operator to other cells in the same group
+      cells.filter(c => c.group == thisCell.group).forEach(c => c.operator = thisCell.operator);
     }
   });
 
-  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
-  cells.forEach(thisCell => thisCell.result = calcResultForCell(thisCell)); // Determine the equation results
-  const combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
+  cells.forEach(thisCell => thisCell.result = calcResultForGroup(thisCell.group)); // Determine the equation results
+  combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
+
 
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
     const result = [];
     function build(cellValuesInCombo, thisGroup) {
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
-        cells.forEach(thisCell => thisCell.value = -1); // Clear all cell values
-        cells.filter(c => cellsByGroup[c.group].length == 1).forEach(c => c.value = c.result); // Fill in the value of lone cells
+        cells.forEach(c => c.value = 0); // Clear all cell values
+        // cells.filter(c => cellsByGroup[c.group].length == 1).forEach(c => c.value = c.result);
+        cells.filter(c => c.candidates.length == 1).forEach(c => c.value = c.candidates[0]); // Fill in the value of lone cells
         cellsByGroup[thisGroup].forEach((thisCell,i) => thisCell.value = cellValuesInCombo[i]); // Place this group's values in the actual cells
-        // Terminate if you can't place a number due to the same number (except for -1) in the same row or column
-        const nonZeroInGroup = cellsByGroup[thisGroup].filter(c => c.value != -1111);
-        if (new Set(nonZeroInGroup.map(c => `${c.value},${c.row}`)).size !== nonZeroInGroup.length) return;
-        if (new Set(nonZeroInGroup.map(c => `${c.value},${c.col}`)).size !== nonZeroInGroup.length) return;
-        // Add the current cell values only if the math result is correct
-        if (calcResultForCell(cellsByGroup[thisGroup][0]) == cellsByGroup[thisGroup][0].result) result.push([...cellValuesInCombo]);
+        // Terminate if you can't place a number due to the same number (except for 0) in the same row or column
+        if ( new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i%boardSize)}`)).size == boardSize**2 // No Column dupes
+          && new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i/boardSize)}`)).size == boardSize**2 // No Row dupes
+          && calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result ) { // If math results matches
+          result.push([...cellValuesInCombo]); // Record as a valid combo only if the math result is correct
+        }
         return;
       }
       for (let i = 1; i <= boardSize; i++) {
@@ -241,11 +258,11 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   console.log("Combos By Group:",combinationsByGroup);
   
   let totalNodeCount = 0;
-  solutionsFound = [];
+  let solutionsFound = [];
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
   console.log("Sorted Group List:",groupList);
   // Test all the combinations of each group, to find how many solutions there are
-  testCombinations(cells.map(c => 0), [...groupList])
+  testCombinations(cells.map(c => 0), [...groupList]);
   function testCombinations(cellTestValues, groupTestList) {
     if (groupTestList.length == 0) {
       solutionsFound.push(cellTestValues);
@@ -255,24 +272,25 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
     if (failedGeneration) return; // Terminate all branches if there are already 2 solutions
     const thisGroup = groupTestList.pop();
     combinationsByGroup[thisGroup].forEach( thisCombo => { // Loop through each combo for a group
-      thisCombo.forEach( (value, index) => { // Place the values of that combo in the related cells
-        cellTestValues[cellsByGroup[thisGroup][index].index] = value;
-      });
-      updateCellDisplay();
+      // Place the values of that combo in the cell test values (this is not the actual cells)
+      thisCombo.forEach( (value, index) => cellTestValues[cellsByGroup[thisGroup][index].index] = value );
       totalNodeCount++; // Track how many nodes have been searched
       // Encode the cellTestValues as value and row (or column), to check for invalid numbers
       // Values of zero are replaced with large values, as to not count as duplicates
-      if ( new Set(cellTestValues.map((v,i) => `${v||(i+1)*20},${~~(i%boardSize)}`)).size == cellTestValues.length
-        && new Set(cellTestValues.map((v,i) => `${v||(i+1)*20},${~~(i/boardSize)}`)).size == cellTestValues.length) { // If there are no row or column issues
-        testCombinations([...cellTestValues], [...groupTestList]); // Call the function for the next group
+      if ( new Set(cellTestValues.map((v,i) => `${v||(i+1)*20},${~~(i%boardSize)}`)).size == cellTestValues.length // Column
+        && new Set(cellTestValues.map((v,i) => `${v||(i+1)*20},${~~(i/boardSize)}`)).size == cellTestValues.length) { // Row
+        testCombinations([...cellTestValues], [...groupTestList]); // Call the function for the next group if there are no row or column issues
       }
     });
   }
   console.log("Total Nodes Searched:",totalNodeCount);
-  console.log(solutionsFound);
+  console.log("Solutions Found:",solutionsFound);
+  console.log("Time:",Date.now()-startTime,"ms");
 
   if (failedGeneration) {
+    console.log("Multiple Solutions Found. Generating new board...");
     generateBoard(boardSize);
+    return;
   }
   
   cells.forEach(thisCell => {
@@ -293,27 +311,26 @@ function initializePRNG(seed) { // Mulberry 32 algorithm for RNG
 }
 function getDailySeed() { // Get a reliable seed for the day (e.g., 20260720)
   const d = new Date();
-  const year = d.getFullYear();
+  const year = d.getFullYear(); // Four digit year
   const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-11
-  const day = String(d.getDate()).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0'); // Two digit day of the month
   return parseInt(`${year}${month}${day}77`, 10);
 }
 
-function calcResultForCell(thisCell) {
-  const cellsInThisGroup = cellsByGroup[thisCell.group];
-  if (thisCell.operator == 0) return thisCell.value; // If alone, there is no operator
-  if (thisCell.operator == 1) return cellsInThisGroup.reduce((total, c) => total + c.value, 0); // Add
-  if (thisCell.operator == 2) return cellsInThisGroup.reduce((total, c) => total * c.value, 1); // Multiply
-  if (thisCell.operator == 3) return Math.abs(cellsInThisGroup[0].value - cellsInThisGroup[1].value); // Subtract
-  if (thisCell.operator == 4) return ( cellsInThisGroup[0].value > cellsInThisGroup[1].value ? // Divide
-    ( cellsInThisGroup[0].value / cellsInThisGroup[1].value ) : 
-    ( cellsInThisGroup[1].value / cellsInThisGroup[0].value ) );
+function calcResultForGroup(thisGroup) {
+  const cellsInThisGroup = cellsByGroup[thisGroup];
+  const thisOperator = cellsInThisGroup[0].operator;
+  if (thisOperator == 0) return cellsInThisGroup[0].value; // If alone, there is no operator
+  if (thisOperator == 1) return cellsInThisGroup.reduce((total, c) => total + c.value, 0); // Add
+  if (thisOperator == 2) return cellsInThisGroup.reduce((total, c) => total * c.value, 1); // Multiply
+  if (thisOperator == 3) return Math.abs(cellsInThisGroup[0].value - cellsInThisGroup[1].value); // Subtract
+  if (thisOperator == 4) return Math.max(cellsInThisGroup[0].value, cellsInThisGroup[1].value) / Math.min(cellsInThisGroup[0].value, cellsInThisGroup[1].value); // Divide
 }
 
 function updateCellDisplay() { // Update the cell display
   cells.forEach(thisCell => {
     const allFull = cellsByGroup[thisCell.group].every(c => c.value > 0);
-    const resultColor = ( allFull ? ( calcResultForCell(thisCell) == thisCell.result ? color.green : color.red ) : color.black );
+    const resultColor = ( allFull ? ( calcResultForGroup(thisCell.group) == thisCell.result ? color.green : color.red ) : color.black );
     const valueColor = ( cells.some(c => c.value == thisCell.value && ((c.row == thisCell.row) != (c.col == thisCell.col))) ? color.red : color.black );
     thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}">${thisCell.value ? thisCell.value : ''}</div>
       <div class="mod-text" style="color:${resultColor}">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
