@@ -1,6 +1,7 @@
 const boardContainer = document.getElementById("board-container");
 const sidebarContainer = document.getElementById("sidebar-container");
 const opSymbols = ['','+','×','−','÷'];
+let isMobile = false; // Whether display is altered for mobile devices
 let cellsByGroup = [];
 let clickTarget = null;
 let cells = [];
@@ -10,6 +11,7 @@ const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', black:'rgb(0, 0,
 const getRandom = initializePRNG(getDailySeed()); // Daily seed
 // const getRandom = initializePRNG(Date.now()); // Variable seed
 generateBoard(boardSize);
+adjustLayout();
 
 function benchmark(amount, boardSize) {
   const startBenchTime = Date.now();
@@ -30,12 +32,6 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   let failedGeneration = false;
   const startTime = Date.now();
   assignNumbers();
-
-  // Set dimensions of everything to be integers, to prevent subpixel rounding
-  const cellDimensions = ~~((Math.min(window.innerHeight,window.innerWidth)*0.85)/boardSize)-4;
-  document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
-  document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
-  document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
 
   function assignNumbers() {
     const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
@@ -338,6 +334,15 @@ function updateCellDisplay() { // Update the cell display
   });
 }
 
+function adjustLayout() {
+  isMobile = (window.innerWidth <= 768);
+  // Set dimensions of everything to be integers, to prevent subpixel rounding
+  const cellDimensions = Math.max(~~((Math.min(window.innerHeight,window.innerWidth)*0.85)/boardSize)-4,50);
+  document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
+  document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
+  document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+}
+
 document.addEventListener('keydown', (event) => {
   [1,2,3,4,5,6,7,8,9].forEach(number => {
     if (event.key == number && number <= boardSize && clickTarget) {
@@ -349,3 +354,4 @@ document.addEventListener('keydown', (event) => {
   }
   updateCellDisplay();
 });
+window.addEventListener("resize", () => adjustLayout()); // Run on page load and when resizing the window

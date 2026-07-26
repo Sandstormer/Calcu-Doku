@@ -21,7 +21,6 @@ div {
   border-radius: 8px;
 }
 #board-container {
-  min-width: 400px;
   height: var(--board-size);
   width: var(--board-size);
   background-color: #E0E0E0;
@@ -45,7 +44,7 @@ div {
   margin: -4px;
   background-color: #EEEEEE;
   background-clip: content-box;
-  min-height: 100px;
+  min-height: 50px;
   aspect-ratio: 1/1;
   cursor: pointer;
 }
