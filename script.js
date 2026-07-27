@@ -8,22 +8,28 @@ let cells = [];
 let boardSize = 4;
 const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', black:'rgb(0, 0, 0)' };
 
-const getRandom = initializePRNG(getDailySeed()); // Daily seed
+let showConsoleOutput = true;
+
+const getRandom = initializePRNG(getDailySeed(77)); // Daily seed
 // const getRandom = initializePRNG(Date.now()); // Variable seed
 generateBoard(boardSize);
-adjustLayout();
 
 function benchmark(amount, boardSize) {
+  showConsoleOutput = false;
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     generateBoard(boardSize);
   }  
+  showConsoleOutput = true;
   console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms");
+}
+function print(...args) {
+  if (showConsoleOutput) console.log(...args);
 }
 
 function generateBoard(boardSize, difficultyFactor = 0.5) {
   if (boardSize < 3 || boardSize > 9) {
-    console.log("Invalid board size: Must be between 3 and 9.");
+    print("Invalid board size: Must be between 3 and 9.");
     return;
   }
 
@@ -31,10 +37,10 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   boardContainer.innerHTML = '';
   let failedGeneration = false;
   const startTime = Date.now();
+  const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
   assignNumbers();
 
   function assignNumbers() {
-    const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
     for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
       const newRow = document.createElement('div'); 
       newRow.className = 'row';
@@ -59,13 +65,13 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
           }
           j = -1;
           rowAssignRetryCount++;
-          console.log(`Retried assigning numbers to row. Attempt ${rowAssignRetryCount}.`);
+          print(`Retried assigning numbers to row. Attempt ${rowAssignRetryCount}.`);
           continue; // Restart the row from column 0
         }
         newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
         newCell.answer = newCell.value;
         newCell.group = null;
-        newCell.candidates = [];
+        newCell.candidates = [...allNumsToGive];
         newCell.isLeader = false;
         newCell.addEventListener('click', () => clickTarget = newCell);
         newRow.appendChild(newCell);
@@ -74,7 +80,7 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
     }
   }
   
-  console.log(cells);
+  print(cells);
   assignAllGroups();
   function assignAllGroups() {
     let thisGroup = 100;
@@ -172,7 +178,7 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
             && ( ( cells[x+y*boardSize].group == cells[x+w+y*boardSize].group && cells[x+(y+h)*boardSize].group == cells[x+w+(y+h)*boardSize].group ) 
               || ( cells[x+y*boardSize].group == cells[x+(y+h)*boardSize].group && cells[x+w+y*boardSize].group == cells[x+w+(y+h)*boardSize].group ) )
           ) {
-            console.log(`Square Degen found: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
+            print(`Square Degen found: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
             generateBoard(boardSize); // Generate a completely new puzzle
             return; // Terminate the current puzzle
           }
@@ -219,44 +225,84 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
     }
   });
 
+  print("Starting Basic Techniques. Current time is",Date.now()-startTime,"ms");
   cells.forEach(thisCell => thisCell.result = calcResultForGroup(thisCell.group)); // Determine the equation results
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
-
+  print("Generated initial group combos. Current time is",Date.now()-startTime,"ms");
+  print("Combo Count:",combinationsByGroup.map(c => c.length));
+  let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+  let totalCombinationsPrev = 999;
+  let techniquesPassCount = 1;
+  while (totalCombinations < totalCombinationsPrev) { // Loop the basic techniques until nothing new is found
+    totalCombinationsPrev = totalCombinations;
+    // Find candidates for individual cells, based off valid combos for each group 
+    groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) => 
+      c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
+    print("Cell Candidates:",cells.map(c => c.candidates));
+    // "Lone Position" Technique: Rows or columns that only have one valid position for a particular number
+    for (let row = 0; row < boardSize; row++) {
+      for (let number = 1; number < boardSize+1; number++) {
+        const cellsWithThatNumber = cells.filter(c => c.row == row && c.candidates.includes(number));
+        if (cellsWithThatNumber.length == 0) print(`Error: No valid spot for ${number} in row ${row}`);
+        if (cellsWithThatNumber.length == 1 && cellsWithThatNumber[0].candidates.length > 1) {
+          cellsWithThatNumber[0].candidates = [number];
+          print(`Found lone position for ${number} in row ${row}`);
+        }
+      }
+    }
+    for (let col = 0; col < boardSize; col++) {
+      for (let number = 1; number < boardSize+1; number++) {
+        const cellsWithThatNumber = cells.filter(c => c.col == col && c.candidates.includes(number));
+        if (cellsWithThatNumber.length == 0) print(`Error: No valid spot for ${number} in column ${col}`);
+        if (cellsWithThatNumber.length == 1 && cellsWithThatNumber[0].candidates.length > 1) {
+          cellsWithThatNumber[0].candidates = [number];
+          print(`Found lone position for ${number} in column ${col}`);
+        }
+      }
+    }
+    print("Cell Candidates:",cells.map(c => c.candidates));
+    // Update the valid combos for each group, based on new findings regarding individual candidates
+    combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup));
+    print("Combo Count:",combinationsByGroup.map(c => c.length));
+    totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+    print(`Finished Pass ${techniquesPassCount++} of Basic Techniques. ${totalCombinations} total group combos. Current time is`,Date.now()-startTime,"ms");
+  }
+  print("Finished All Basic Techniques in",Date.now()-startTime,"ms");
 
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
-    const result = [];
+    const theseCombos = [];
     function build(cellValuesInCombo, thisGroup) {
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
-        cells.forEach(c => c.value = 0); // Clear all cell values
-        // cells.filter(c => cellsByGroup[c.group].length == 1).forEach(c => c.value = c.result);
-        cells.filter(c => c.candidates.length == 1).forEach(c => c.value = c.candidates[0]); // Fill in the value of lone cells
-        cellsByGroup[thisGroup].forEach((thisCell,i) => thisCell.value = cellValuesInCombo[i]); // Place this group's values in the actual cells
-        // Terminate if you can't place a number due to the same number (except for 0) in the same row or column
-        if ( new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i%boardSize)}`)).size == boardSize**2 // No Column dupes
-          && new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i/boardSize)}`)).size == boardSize**2 // No Row dupes
-          && calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result ) { // If math results matches
-          result.push([...cellValuesInCombo]); // Record as a valid combo only if the math result is correct
+        // Reset all cell values, but fill in cells that only have one candidate
+        cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
+        cellsByGroup[thisGroup].forEach((c,i) => c.value = cellValuesInCombo[i]); // Place this group's values in the actual cells
+        // Check that there are no dupes in the same row or column, and that the math results is correct
+        if ( calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result // If math results matches
+          && new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i%boardSize)}`)).size == boardSize**2 // No Column dupes
+          && new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i/boardSize)}`)).size == boardSize**2 ) { // No Row dupes
+          theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
         }
         return;
       }
       for (let i = 1; i <= boardSize; i++) {
         cellValuesInCombo.push(i);
-        build(cellValuesInCombo, thisGroup);
+        const validCandidates = cellsByGroup[thisGroup][cellValuesInCombo.length-1].candidates;
+        if (validCandidates.length == boardSize || validCandidates.includes(i)) build(cellValuesInCombo, thisGroup);
         cellValuesInCombo.pop();
       }
     }
     build([], thisGroup);
-    return result;
+    return theseCombos;
   }
 
-  console.log("Group List:",groupList);
-  console.log("Cells By Group:",cellsByGroup);
-  console.log("Combos By Group:",combinationsByGroup);
+  print("Group List:",groupList);
+  print("Cells By Group:",cellsByGroup);
+  print("Combos By Group:",combinationsByGroup);
   
   let totalNodeCount = 0;
   let solutionsFound = [];
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
-  console.log("Sorted Group List:",groupList);
+  print("Sorted Group List:",groupList);
   // Test all the combinations of each group, to find how many solutions there are
   testCombinations(cells.map(c => 0), [...groupList]);
   function testCombinations(cellTestValues, groupTestList) {
@@ -279,12 +325,12 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
       }
     });
   }
-  console.log("Total Nodes Searched:",totalNodeCount);
-  console.log("Solutions Found:",solutionsFound);
-  console.log("Time:",Date.now()-startTime,"ms");
+  print("Total Nodes Searched:",totalNodeCount);
+  print("Solutions Found:",solutionsFound);
+  console.log("Total Generation Time:",Date.now()-startTime,"ms");
 
   if (failedGeneration) {
-    console.log("Multiple Solutions Found. Generating new board...");
+    print("Multiple Solutions Found. Generating new board...");
     generateBoard(boardSize);
     return;
   }
@@ -292,8 +338,9 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   cells.forEach(thisCell => {
     thisCell.value = 0; // Hide the cell values
     thisCell.addEventListener('mouseover', () => clickTarget = thisCell);
-    // thisCell.candidates = [];
+    thisCell.candidates = [];
   });
+  adjustLayout();
   updateCellDisplay();
 }
 
@@ -305,12 +352,12 @@ function initializePRNG(seed) { // Mulberry 32 algorithm for RNG
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
 }
-function getDailySeed() { // Get a reliable seed for the day (e.g., 20260720)
+function getDailySeed(seedOffset = 77) { // Get a reliable seed for the day (e.g., 20260720)
   const d = new Date();
   const year = d.getFullYear(); // Four digit year
   const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-11
   const day = String(d.getDate()).padStart(2, '0'); // Two digit day of the month
-  return parseInt(`${year}${month}${day}77`, 10);
+  return parseInt(`${year}${month}${day}${seedOffset}`, 10);
 }
 
 function calcResultForGroup(thisGroup) {
