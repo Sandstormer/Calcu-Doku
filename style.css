@@ -48,9 +48,6 @@ div {
   aspect-ratio: 1/1;
   cursor: pointer;
 }
-.cell:hover {
-  background-color: rgb(240, 230, 140);
-}
 .cell-value {
   font-size: 80px;
   line-height: 100%;
@@ -66,8 +63,9 @@ div {
   font-size: 34px;
   position: absolute;
   text-align: right;
-  top: 5%;
+  top: 97%;
   right: 5%;
+  transform: translateY(-100%);
 }
 
 /* Cell faint borders */

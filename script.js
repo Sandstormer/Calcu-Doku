@@ -2,24 +2,37 @@ const boardContainer = document.getElementById("board-container");
 const sidebarContainer = document.getElementById("sidebar-container");
 const opSymbols = ['','+','×','−','÷'];
 let isMobile = false; // Whether display is altered for mobile devices
+let isCandidateMode = false; // Whether "pencil mode" is activated
 let cellsByGroup = [];
 let clickTarget = null;
 let cells = [];
 let boardSize = 4;
-const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', black:'rgb(0, 0, 0)' };
+const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', black:'rgb(0, 0, 0)' };
 
 let showConsoleOutput = true;
 
-const getRandom = initializePRNG(getDailySeed(77)); // Daily seed
-// const getRandom = initializePRNG(Date.now()); // Variable seed
-generateBoard(boardSize);
+let rollingSeed = getDailySeed(77); // Daily seed
+// rollingSeed = Date.now(); // Variable seed
 
-function benchmark(amount, boardSize) {
+generateBoard(boardSize);
+// generateBoard(boardSize, 252644551186571);
+// findHardestBoard(20,6);
+
+function findHardestBoard(amount, thisSize = boardSize) {
+  let hardestBoard = { time:0, seed:null };
+  for (let i = 0; i < amount; i++) {
+    const thisBoard = generateBoard(thisSize);
+    if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
+  }
+  print("Finished seed search after",amount,"attempts.");
+  print("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms");
+}
+function benchmark(amount, thisSize) {
   showConsoleOutput = false;
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
-    generateBoard(boardSize);
-  }  
+    generateBoard(thisSize);
+  }
   showConsoleOutput = true;
   console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms");
 }
@@ -27,11 +40,16 @@ function print(...args) {
   if (showConsoleOutput) console.log(...args);
 }
 
-function generateBoard(boardSize, difficultyFactor = 0.5) {
-  if (boardSize < 3 || boardSize > 9) {
+function generateBoard(newBoardSize = boardSize, thisSeed) {
+  const getRandom = initializePRNG(thisSeed);
+  if (thisSeed == null) thisSeed = rollingSeed;
+  const difficultyFactor = 0.5;
+  if (newBoardSize < 3 || newBoardSize > 9) {
     print("Invalid board size: Must be between 3 and 9.");
-    return;
+    return { time:0, seed:thisSeed };
   }
+  boardSize = newBoardSize;
+  print("Start of puzzle generation with seed",thisSeed);
 
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
@@ -79,8 +97,8 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
       }
     }
   }
-  
-  print(cells);
+  print("Cells after number placement:",cells);
+
   assignAllGroups();
   function assignAllGroups() {
     let thisGroup = 100;
@@ -163,9 +181,10 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
           thisGroup++;
         }
       });
+      groupList = [...Array(thisGroup).keys()];
     }
-    groupList = [...Array(thisGroup).keys()];
   }
+  print("Finished assigning groups");
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
   // This is a quick identifier of multiple solutions                                [ 3 , 1 ]
@@ -179,8 +198,8 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
               || ( cells[x+y*boardSize].group == cells[x+(y+h)*boardSize].group && cells[x+w+y*boardSize].group == cells[x+w+(y+h)*boardSize].group ) )
           ) {
             print(`Square Degen found: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
-            generateBoard(boardSize); // Generate a completely new puzzle
-            return; // Terminate the current puzzle
+            print("Generating new board...");
+            return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
           }
         }
       }
@@ -225,11 +244,10 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
     }
   });
 
-  print("Starting Basic Techniques. Current time is",Date.now()-startTime,"ms");
+  print("Starting Basic Techniques. Current time is",Date.now()-startTime,"ms.");
   cells.forEach(thisCell => thisCell.result = calcResultForGroup(thisCell.group)); // Determine the equation results
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
-  print("Generated initial group combos. Current time is",Date.now()-startTime,"ms");
-  print("Combo Count:",combinationsByGroup.map(c => c.length));
+  print("Generated initial group combos. Current time is",Date.now()-startTime,"ms.");
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   let totalCombinationsPrev = 999;
   let techniquesPassCount = 1;
@@ -260,34 +278,92 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
         }
       }
     }
-    print("Cell Candidates:",cells.map(c => c.candidates));
+    // "Double Elimination" Technique: Two cells that only have two candidates eliminate those numbers for a whole row or column
+    for (let row = 0; row < boardSize; row++) {
+      for (let thisIndex = row*boardSize; thisIndex%boardSize < boardSize-1; thisIndex++) {
+        const mainCands = cells[thisIndex].candidates;
+        if (mainCands.length == 2) {
+          for (let partnerIndex = thisIndex+1; partnerIndex%boardSize > 0; partnerIndex++) {
+            const partnerCands = cells[partnerIndex].candidates;
+            if (partnerCands.length == 2 && mainCands.includes(partnerCands[0]) && mainCands.includes(partnerCands[1])) {
+              const cellsToDo = cells.filter(c => c.row == row && c.index != thisIndex && c.index != partnerIndex 
+                && ( c.candidates.includes(mainCands[0]) || c.candidates.includes(mainCands[1]) ) );
+              if (cellsToDo.length) {
+                cellsToDo.forEach(c => c.candidates = c.candidates.filter(v => !mainCands.includes(v)));
+                print(`Found double elimination for ${partnerCands[0]} & ${partnerCands[1]} in row ${row}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    for (let col = 0; col < boardSize; col++) {
+      for (let thisIndex = col; thisIndex < boardSize**2-boardSize; thisIndex = thisIndex+boardSize) {
+        for (let partnerIndex = thisIndex+boardSize; partnerIndex < boardSize**2; partnerIndex = partnerIndex+boardSize) {
+          const candA = cells[thisIndex].candidates;
+          const candB = cells[partnerIndex].candidates;
+          if (candA.length == 2 && candB.length == 2) {
+            if (candA.includes(candB[0]) && candA.includes(candB[1])) {
+              const cellsToDo = cells.filter(c => c.col == col && c.index != thisIndex && c.index != partnerIndex 
+                && ( c.candidates.includes(candA[0]) || c.candidates.includes(candA[1]) ) );
+              if (cellsToDo.length) {
+                cellsToDo.forEach(c => c.candidates = c.candidates.filter(v => !candA.includes(v)));
+                print(`Found double elimination for ${candB[0]} & ${candB[1]} in column ${col}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    print("Cell Candidates After Pass:",cells.map(c => c.candidates));
     // Update the valid combos for each group, based on new findings regarding individual candidates
     combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup));
-    print("Combo Count:",combinationsByGroup.map(c => c.length));
+    print("Combos By Group:",combinationsByGroup);
+    // "Dead End" Technique: Test each combo and see if it invalidates another group right away
+    // This is quite slow, and sometimes not even worth it
     totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-    print(`Finished Pass ${techniquesPassCount++} of Basic Techniques. ${totalCombinations} total group combos. Current time is`,Date.now()-startTime,"ms");
+    if (totalCombinations == totalCombinationsPrev) {
+      groupList.filter(thisGroup => combinationsByGroup[thisGroup].length < 20).forEach(thisGroup => // For each group that isn't too big
+        combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter(thisCombo => { // Remove combos which are a dead end
+        cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) ); // Reset all cell values, but fill in cells that only have one candidate
+        cellsByGroup[thisGroup].forEach((c,i) => c.value = thisCombo[i]); // Fill in the cells from this combo
+        return groupList.filter(secGroup => secGroup != thisGroup).every(g => // Every group must have at least one valid combo left
+          combinationsByGroup[g].length > 20 || // Short-circuit if secondary group is too big
+          combinationsByGroup[g].some(secCombo =>
+            // Every cell in that combo must have no conflicts in the row or column
+            cellsByGroup[g].every((secCell,i) => !cells.some(c => c.value == secCombo[i] && ( (c.row == secCell.row) != (c.col == secCell.col) ) ) )
+        ));
+      }));
+    }
+    // Report the end of this pass
+    print("Combo Counts:",combinationsByGroup.map(c => c.length));
+    totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+    print("Finished Pass",techniquesPassCount++,"of Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
   }
   print("Finished All Basic Techniques in",Date.now()-startTime,"ms");
 
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
     const theseCombos = [];
+    // Reset all cell values, but fill in cells that only have one candidate
+    cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
     function build(cellValuesInCombo, thisGroup) {
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
-        // Reset all cell values, but fill in cells that only have one candidate
-        cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
-        cellsByGroup[thisGroup].forEach((c,i) => c.value = cellValuesInCombo[i]); // Place this group's values in the actual cells
-        // Check that there are no dupes in the same row or column, and that the math results is correct
-        if ( calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result // If math results matches
-          && new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i%boardSize)}`)).size == boardSize**2 // No Column dupes
-          && new Set(cells.map((c,i) => `${c.value||(i+1)*20},${~~(i/boardSize)}`)).size == boardSize**2 ) { // No Row dupes
+        if (calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result) { // If math results matches
           theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
         }
         return;
       }
-      for (let i = 1; i <= boardSize; i++) {
-        cellValuesInCombo.push(i);
-        const validCandidates = cellsByGroup[thisGroup][cellValuesInCombo.length-1].candidates;
-        if (validCandidates.length == boardSize || validCandidates.includes(i)) build(cellValuesInCombo, thisGroup);
+      for (let thisNum = 1; thisNum <= boardSize; thisNum++) {
+        cellValuesInCombo.push(thisNum);
+        cellsByGroup[thisGroup].filter((_,i) => i >= cellValuesInCombo.length).forEach(c => c.value = 0); // Clear later cells in group
+        const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length-1];
+        if (thisCell.candidates.length == boardSize || thisCell.candidates.includes(thisNum)) { // If this number is in the candidate list
+          thisCell.value = thisNum; // Place the latest value into the actual cell
+          // Check that there are no dupes in the same row or column
+          if (!cells.some(c => c.value == thisNum && ( (c.row == thisCell.row) != (c.col == thisCell.col) ) )) {
+            build(cellValuesInCombo, thisGroup); // Continue building a valid combo for this group
+          }
+        }
         cellValuesInCombo.pop();
       }
     }
@@ -327,12 +403,12 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   }
   print("Total Nodes Searched:",totalNodeCount);
   print("Solutions Found:",solutionsFound);
+  print("Finished puzzle generation with seed",thisSeed);
   console.log("Total Generation Time:",Date.now()-startTime,"ms");
 
   if (failedGeneration) {
-    print("Multiple Solutions Found. Generating new board...");
-    generateBoard(boardSize);
-    return;
+    print("Multiple solutions found during final search. Generating new board...");
+    return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
   }
   
   cells.forEach(thisCell => {
@@ -342,11 +418,13 @@ function generateBoard(boardSize, difficultyFactor = 0.5) {
   });
   adjustLayout();
   updateCellDisplay();
+  return { time:Date.now()-startTime, seed:thisSeed }; // Return generation time and seed
 }
 
-function initializePRNG(seed) { // Mulberry 32 algorithm for RNG
+function initializePRNG(forcedSeed) { // Mulberry 32 algorithm for RNG
   return function() {
-    var t = seed += 0x6D2B79F5;
+    if (forcedSeed) var t = forcedSeed += 0x6D2B79F5;
+    else var t = rollingSeed += 0x6D2B79F5;
     t = Math.imul(t ^ t >>> 15, t | 1);
     t ^= t + Math.imul(t ^ t >>> 7, t | 61);
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
@@ -378,6 +456,15 @@ function updateCellDisplay() { // Update the cell display
     thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}">${thisCell.value ? thisCell.value : ''}</div>
       <div class="mod-text" style="color:${resultColor}">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
       <div class="candidates">${thisCell.candidates.join(' ')}</div>`;
+    thisCell.style.backgroundColor = "#EEEEEE";
+    if (clickTarget == thisCell) thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : "rgb(240, 230, 140)" );
+  });
+  updateCellHighlight();
+}
+function updateCellHighlight() { // Update the cell background color
+  cells.forEach(thisCell => {
+    thisCell.style.backgroundColor = "#EEEEEE";
+    if (clickTarget == thisCell) thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : "rgb(240, 230, 140)" );
   });
 }
 
@@ -390,15 +477,30 @@ function adjustLayout() {
   document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
 }
 
+document.addEventListener('mousemove', (event) => {
+  updateCellHighlight();
+});
 document.addEventListener('keydown', (event) => {
   [1,2,3,4,5,6,7,8,9].forEach(number => {
     if (event.key == number && number <= boardSize && clickTarget) {
-      clickTarget.value = number;
+      if (isCandidateMode) {
+        if (!clickTarget.candidates.includes(number)) {
+          clickTarget.candidates = [number,...clickTarget.candidates].sort();
+        }
+      } else {
+        clickTarget.value = number;
+        clickTarget.candidates = [];
+      }
     }
   });
   if (['0','`','Escape','Backspace','Delete'].includes(event.key)) {
-    clickTarget.value = 0; // Clear the cell's value
+    if (isCandidateMode) {
+      clickTarget.candidates = []; // Clear the cell's candidates
+    } else {
+      clickTarget.value = 0; // Clear the cell's value
+    }
   }
+  if (event.key == "c") isCandidateMode = !isCandidateMode;
   updateCellDisplay();
 });
 window.addEventListener("resize", () => adjustLayout()); // Run on page load and when resizing the window
