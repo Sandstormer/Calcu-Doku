@@ -16,7 +16,10 @@ let rollingSeed = getDailySeed(77); // Daily seed
 
 generateBoard(boardSize);
 // generateBoard(boardSize, 252644551186571);
-// findHardestBoard(20,6);
+// generateBoard(7, 18052107160292);
+// generateBoard(7, 36609531977608);
+// generateBoard(9, 12088528880364);
+// findHardestBoard(8,7);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
@@ -24,8 +27,8 @@ function findHardestBoard(amount, thisSize = boardSize) {
     const thisBoard = generateBoard(thisSize);
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
-  print("Finished seed search after",amount,"attempts.");
-  print("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms");
+  logToConsole("Finished seed search after",amount,"attempts.");
+  logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms");
 }
 function benchmark(amount, thisSize) {
   showConsoleOutput = false;
@@ -36,7 +39,7 @@ function benchmark(amount, thisSize) {
   showConsoleOutput = true;
   console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms");
 }
-function print(...args) {
+function logToConsole(...args) {
   if (showConsoleOutput) console.log(...args);
 }
 
@@ -45,19 +48,20 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
   if (thisSeed == null) thisSeed = rollingSeed;
   const difficultyFactor = 0.5;
   if (newBoardSize < 3 || newBoardSize > 9) {
-    print("Invalid board size: Must be between 3 and 9.");
+    logToConsole("Invalid board size: Must be between 3 and 9.");
     return { time:0, seed:thisSeed };
   }
   boardSize = newBoardSize;
-  print("Start of puzzle generation with seed",thisSeed);
+  logToConsole("Start of puzzle generation with seed",thisSeed);
 
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
   let failedGeneration = false;
   const startTime = Date.now();
-  const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
-  assignNumbers();
 
+  const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
+  const allIndexes = [...Array(boardSize).keys()];
+  assignNumbers();
   function assignNumbers() {
     for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
       const newRow = document.createElement('div'); 
@@ -83,7 +87,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
           }
           j = -1;
           rowAssignRetryCount++;
-          print(`Retried assigning numbers to row. Attempt ${rowAssignRetryCount}.`);
+          logToConsole(`Retried assigning numbers to row. Attempt ${rowAssignRetryCount}.`);
           continue; // Restart the row from column 0
         }
         newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
@@ -97,7 +101,10 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
       }
     }
   }
-  print("Cells after number placement:",cells);
+  logToConsole("Cells after number placement:",cells);
+  const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
+  const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
+  cells.forEach(thisCell => thisCell.impactedCells = cells.filter(c => c != thisCell && (c.row == thisCell.row) != (c.col == thisCell.col)));
 
   assignAllGroups();
   function assignAllGroups() {
@@ -184,7 +191,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
       groupList = [...Array(thisGroup).keys()];
     }
   }
-  print("Finished assigning groups");
+  logToConsole("Finished assigning groups");
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
   // This is a quick identifier of multiple solutions                                [ 3 , 1 ]
@@ -197,8 +204,8 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
             && ( ( cells[x+y*boardSize].group == cells[x+w+y*boardSize].group && cells[x+(y+h)*boardSize].group == cells[x+w+(y+h)*boardSize].group ) 
               || ( cells[x+y*boardSize].group == cells[x+(y+h)*boardSize].group && cells[x+w+y*boardSize].group == cells[x+w+(y+h)*boardSize].group ) )
           ) {
-            print(`Square Degen found: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
-            print("Generating new board...");
+            logToConsole(`Square Degen found: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
+            logToConsole("Generating new board...");
             return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
           }
         }
@@ -233,7 +240,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
         }
       } 
       if (thisCell.operator == -1) { // For larger groups, or if smaller groups didn't assign yet
-        if (getRandom() < 0.4 && cellsByGroup[thisCell.group].reduce((total, c) => total * c.value, 1) < 300) {
+        if (getRandom() < 0.45 && cellsByGroup[thisCell.group].reduce((total, c) => total * c.value, 1) < 300) {
           thisCell.operator = 2; // Set to multiply
         } else {
           thisCell.operator = 1; // Set to add
@@ -244,53 +251,90 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
     }
   });
 
-  print("Starting Basic Techniques. Current time is",Date.now()-startTime,"ms.");
+  logToConsole("Starting Basic Techniques. Current time is",Date.now()-startTime,"ms.");
   cells.forEach(thisCell => thisCell.result = calcResultForGroup(thisCell.group)); // Determine the equation results
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
-  print("Generated initial group combos. Current time is",Date.now()-startTime,"ms.");
+  logToConsole("Generated initial group combos. Current time is",Date.now()-startTime,"ms.");
+  logToConsole("Combos By Group:",combinationsByGroup);
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-  let totalCombinationsPrev = 999;
+  let totalCombinationsPrev = null;
   let techniquesPassCount = 1;
-  while (totalCombinations < totalCombinationsPrev) { // Loop the basic techniques until nothing new is found
+  // Loop the basic techniques until nothing new is found
+  while (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) {
     totalCombinationsPrev = totalCombinations;
     // Find candidates for individual cells, based off valid combos for each group 
     groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) => 
       c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
-    print("Cell Candidates:",cells.map(c => c.candidates));
+    logToConsole("Cell Candidates:",cells.map(c => c.candidates));
     // "Lone Position" Technique: Rows or columns that only have one valid position for a particular number
     for (let row = 0; row < boardSize; row++) {
       for (let number = 1; number < boardSize+1; number++) {
-        const cellsWithThatNumber = cells.filter(c => c.row == row && c.candidates.includes(number));
-        if (cellsWithThatNumber.length == 0) print(`Error: No valid spot for ${number} in row ${row}`);
+        const cellsWithThatNumber = cellsByRow[row].filter(c => c.candidates.includes(number));
+        if (cellsWithThatNumber.length == 0) logToConsole(`Error: No valid spot for ${number} in row ${row}`);
         if (cellsWithThatNumber.length == 1 && cellsWithThatNumber[0].candidates.length > 1) {
           cellsWithThatNumber[0].candidates = [number];
-          print(`Found lone position for ${number} in row ${row}`);
+          logToConsole(`Found lone position for ${number} in row ${row}`);
         }
       }
     }
     for (let col = 0; col < boardSize; col++) {
       for (let number = 1; number < boardSize+1; number++) {
-        const cellsWithThatNumber = cells.filter(c => c.col == col && c.candidates.includes(number));
-        if (cellsWithThatNumber.length == 0) print(`Error: No valid spot for ${number} in column ${col}`);
+        const cellsWithThatNumber = cellsByColumn[col].filter(c => c.candidates.includes(number));
+        if (cellsWithThatNumber.length == 0) logToConsole(`Error: No valid spot for ${number} in column ${col}`);
         if (cellsWithThatNumber.length == 1 && cellsWithThatNumber[0].candidates.length > 1) {
           cellsWithThatNumber[0].candidates = [number];
-          print(`Found lone position for ${number} in column ${col}`);
+          logToConsole(`Found lone position for ${number} in column ${col}`);
         }
       }
     }
-    // "Double Elimination" Technique: Two cells that only have two candidates eliminate those numbers for a whole row or column
-    for (let row = 0; row < boardSize; row++) {
-      for (let thisIndex = row*boardSize; thisIndex%boardSize < boardSize-1; thisIndex++) {
-        const mainCands = cells[thisIndex].candidates;
-        if (mainCands.length == 2) {
-          for (let partnerIndex = thisIndex+1; partnerIndex%boardSize > 0; partnerIndex++) {
-            const partnerCands = cells[partnerIndex].candidates;
-            if (partnerCands.length == 2 && mainCands.includes(partnerCands[0]) && mainCands.includes(partnerCands[1])) {
-              const cellsToDo = cells.filter(c => c.row == row && c.index != thisIndex && c.index != partnerIndex 
-                && ( c.candidates.includes(mainCands[0]) || c.candidates.includes(mainCands[1]) ) );
+    // "Single Elimination" Technique: If a group forces a number to be always be in a line, eliminate that number for the whole line
+    groupList.forEach(thisGroup => {
+      if (combinationsByGroup[thisGroup].length > 1) { // If there is only one combo, this whole technique is redundant
+        const rowsToCheck = new Set(cellsByGroup[thisGroup].map(c => c.row));
+        rowsToCheck.forEach(row => {
+          const numbersToCheck = [...new Set(combinationsByGroup[thisGroup].flatMap(thisCombo => thisCombo.filter((_,i) => cellsByGroup[thisGroup][i].row == row)))];
+          numbersToCheck.forEach(thisNum => {
+            // If every combo in that group has some cell with that number in that row
+            if (combinationsByGroup[thisGroup].every(thisCombo => thisCombo.some((value,i) => value == thisNum && cellsByGroup[thisGroup][i].row == row))) {
+              const cellsToDo = cellsByRow[row].filter(c => c.group != thisGroup && c.candidates.includes(thisNum));
               if (cellsToDo.length) {
-                cellsToDo.forEach(c => c.candidates = c.candidates.filter(v => !mainCands.includes(v)));
-                print(`Found double elimination for ${partnerCands[0]} & ${partnerCands[1]} in row ${row}`);
+                cellsToDo.forEach(c => c.candidates = c.candidates.filter(value => value != thisNum));
+                logToConsole("Single elimination found in group",thisGroup,"for number",thisNum,"in row",row);
+              }
+            }
+          });
+        });
+        const columnsToCheck = new Set(cellsByGroup[thisGroup].map(c => c.col));
+        columnsToCheck.forEach(col => {
+          const numbersToCheck = [...new Set(combinationsByGroup[thisGroup].flatMap(thisCombo => thisCombo.filter((_,i) => cellsByGroup[thisGroup][i].col == col)))];
+          numbersToCheck.forEach(thisNum => {
+            // If every combo in that group has some cell with that number in that column
+            if (combinationsByGroup[thisGroup].every(thisCombo => thisCombo.some((value,i) => value == thisNum && cellsByGroup[thisGroup][i].col == col))) {
+              const cellsToDo = cellsByColumn[col].filter(c => c.group != thisGroup && c.candidates.includes(thisNum));
+              if (cellsToDo.length) {
+                cellsToDo.forEach(c => c.candidates = c.candidates.filter(value => value != thisNum));
+                logToConsole("Single elimination found in group",thisGroup,"for number",thisNum,"in column",col);
+              }
+            }
+          });
+        });
+      }
+    });
+    // "Double Elimination" Technique: If two cells in a line have the same only two candidates, eliminate those numbers for the whole line
+    for (let row = 0; row < boardSize; row++) {
+      if (cellsByRow[row].filter(c => c.candidates.length == 2).length >= 2) {
+        for (let thisIndex = row*boardSize; thisIndex%boardSize < boardSize-1; thisIndex++) {
+          const mainCands = cells[thisIndex].candidates;
+          if (mainCands.length == 2) {
+            for (let partnerIndex = thisIndex+1; partnerIndex%boardSize > 0; partnerIndex++) {
+              const partnerCands = cells[partnerIndex].candidates;
+              if (partnerCands.length == 2 && mainCands.includes(partnerCands[0]) && mainCands.includes(partnerCands[1])) {
+                const cellsToDo = cellsByRow[row].filter(c => c.index != thisIndex && c.index != partnerIndex 
+                  && ( c.candidates.includes(mainCands[0]) || c.candidates.includes(mainCands[1]) ) );
+                if (cellsToDo.length) {
+                  cellsToDo.forEach(c => c.candidates = c.candidates.filter(v => !mainCands.includes(v)));
+                  logToConsole(`Found double elimination for ${partnerCands[0]} & ${partnerCands[1]} in row ${row}`);
+                }
               }
             }
           }
@@ -298,49 +342,54 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
       }
     }
     for (let col = 0; col < boardSize; col++) {
-      for (let thisIndex = col; thisIndex < boardSize**2-boardSize; thisIndex = thisIndex+boardSize) {
-        for (let partnerIndex = thisIndex+boardSize; partnerIndex < boardSize**2; partnerIndex = partnerIndex+boardSize) {
-          const candA = cells[thisIndex].candidates;
-          const candB = cells[partnerIndex].candidates;
-          if (candA.length == 2 && candB.length == 2) {
-            if (candA.includes(candB[0]) && candA.includes(candB[1])) {
-              const cellsToDo = cells.filter(c => c.col == col && c.index != thisIndex && c.index != partnerIndex 
-                && ( c.candidates.includes(candA[0]) || c.candidates.includes(candA[1]) ) );
-              if (cellsToDo.length) {
-                cellsToDo.forEach(c => c.candidates = c.candidates.filter(v => !candA.includes(v)));
-                print(`Found double elimination for ${candB[0]} & ${candB[1]} in column ${col}`);
+      if (cellsByColumn[col].filter(c => c.candidates.length == 2).length >= 2) {
+        for (let thisIndex = col; thisIndex < boardSize**2-boardSize; thisIndex = thisIndex+boardSize) {
+          for (let partnerIndex = thisIndex+boardSize; partnerIndex < boardSize**2; partnerIndex = partnerIndex+boardSize) {
+            const candA = cells[thisIndex].candidates;
+            const candB = cells[partnerIndex].candidates;
+            if (candA.length == 2 && candB.length == 2) {
+              if (candA.includes(candB[0]) && candA.includes(candB[1])) {
+                const cellsToDo = cellsByColumn[col].filter(c => c.index != thisIndex && c.index != partnerIndex 
+                  && ( c.candidates.includes(candA[0]) || c.candidates.includes(candA[1]) ) );
+                if (cellsToDo.length) {
+                  cellsToDo.forEach(c => c.candidates = c.candidates.filter(v => !candA.includes(v)));
+                  logToConsole(`Found double elimination for ${candB[0]} & ${candB[1]} in column ${col}`);
+                }
               }
             }
           }
         }
       }
     }
-    print("Cell Candidates After Pass:",cells.map(c => c.candidates));
+    logToConsole("Cell Candidates After Pass:",cells.map(c => c.candidates));
     // Update the valid combos for each group, based on new findings regarding individual candidates
     combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup));
-    print("Combos By Group:",combinationsByGroup);
+    logToConsole("Combos By Group:",combinationsByGroup);
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
     totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-    if (totalCombinations == totalCombinationsPrev) {
+    if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
+      logToConsole("Running Dead End technique in Pass",techniquesPassCount);
       groupList.filter(thisGroup => combinationsByGroup[thisGroup].length < 20).forEach(thisGroup => // For each group that isn't too big
         combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter(thisCombo => { // Remove combos which are a dead end
         cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) ); // Reset all cell values, but fill in cells that only have one candidate
         cellsByGroup[thisGroup].forEach((c,i) => c.value = thisCombo[i]); // Fill in the cells from this combo
-        return groupList.filter(secGroup => secGroup != thisGroup).every(g => // Every group must have at least one valid combo left
+        const isValidCombo = groupList.filter(secGroup => secGroup != thisGroup).every(g => // Check all other groups
           combinationsByGroup[g].length > 20 || // Short-circuit if secondary group is too big
-          combinationsByGroup[g].some(secCombo =>
+          combinationsByGroup[g].some(secCombo => // Must have at least one valid combo left
             // Every cell in that combo must have no conflicts in the row or column
-            cellsByGroup[g].every((secCell,i) => !cells.some(c => c.value == secCombo[i] && ( (c.row == secCell.row) != (c.col == secCell.col) ) ) )
+            cellsByGroup[g].every((secCell,i) => !secCell.impactedCells.some(c => c.value == secCombo[i]))
         ));
+        if (!isValidCombo) logToConsole("Found dead end combo",thisCombo,"in group",thisGroup);
+        return isValidCombo;
       }));
     }
     // Report the end of this pass
-    print("Combo Counts:",combinationsByGroup.map(c => c.length));
+    logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
     totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-    print("Finished Pass",techniquesPassCount++,"of Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
+    logToConsole("Finished Pass",techniquesPassCount++,"of Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
   }
-  print("Finished All Basic Techniques in",Date.now()-startTime,"ms");
+  logToConsole("Finished All Basic Techniques in",Date.now()-startTime,"ms");
 
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
     const theseCombos = [];
@@ -348,66 +397,71 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
     cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
     function build(cellValuesInCombo, thisGroup) {
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
-        if (calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result) { // If math results matches
+        if (calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result) { // If math result matches
           theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
         }
         return;
       }
-      for (let thisNum = 1; thisNum <= boardSize; thisNum++) {
-        cellValuesInCombo.push(thisNum);
-        cellsByGroup[thisGroup].filter((_,i) => i >= cellValuesInCombo.length).forEach(c => c.value = 0); // Clear later cells in group
-        const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length-1];
-        if (thisCell.candidates.length == boardSize || thisCell.candidates.includes(thisNum)) { // If this number is in the candidate list
+      const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length];
+      thisCell.candidates.forEach(thisNum => { // Only try numbers in the candidate list
+        if (!thisCell.impactedCells.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
           thisCell.value = thisNum; // Place the latest value into the actual cell
-          // Check that there are no dupes in the same row or column
-          if (!cells.some(c => c.value == thisNum && ( (c.row == thisCell.row) != (c.col == thisCell.col) ) )) {
-            build(cellValuesInCombo, thisGroup); // Continue building a valid combo for this group
-          }
+          build([...cellValuesInCombo,thisNum], thisGroup); // Continue building a valid combo for this group
         }
-        cellValuesInCombo.pop();
-      }
+      });
+      thisCell.value = 0; // Clear the value, so it doesn't remain once the function has walked back
     }
     build([], thisGroup);
     return theseCombos;
   }
 
-  print("Group List:",groupList);
-  print("Cells By Group:",cellsByGroup);
-  print("Combos By Group:",combinationsByGroup);
+  logToConsole("Group List:",groupList);
+  logToConsole("Cells By Group:",cellsByGroup);
+  logToConsole("Combos By Group:",combinationsByGroup);
   
   let totalNodeCount = 0;
   let solutionsFound = [];
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
-  print("Sorted Group List:",groupList);
+  logToConsole("Sorted Group List:",groupList);
+  indexesByImpact = cells.map(thisCell => thisCell.impactedCells.map(c => c.index));
   // Test all the combinations of each group, to find how many solutions there are
   testCombinations(cells.map(c => 0), [...groupList]);
   function testCombinations(cellTestValues, groupTestList) {
     if (groupTestList.length == 0) {
-      solutionsFound.push(cellTestValues);
+      solutionsFound.push([...cellTestValues]);
       if (solutionsFound.length > 1) failedGeneration = true; // If there is more than one solution, terminate early
       return; // Terminate this branch if all groups have been placed (which means a valid solution)
     }
     if (failedGeneration) return; // Terminate all branches if there are already 2 solutions
     const thisGroup = groupTestList.pop();
-    combinationsByGroup[thisGroup].forEach( thisCombo => { // Loop through each combo for a group
-      // Place the values of that combo in the cell test values (this is not the actual cells)
-      thisCombo.forEach( (value, index) => cellTestValues[cellsByGroup[thisGroup][index].index] = value );
+    combinationsByGroup[thisGroup].forEach( thisCombo => { // Loop through each combo in this group
       totalNodeCount++; // Track how many nodes have been searched
-      // Encode the cellTestValues as value and row (or column), to check for invalid numbers
-      // Values of zero are replaced with large values, as to not count as duplicates
-      if ( new Set(cellTestValues.map((v,i) => `${v||(i+1)*20},${~~(i%boardSize)}`)).size == cellTestValues.length // Column
-        && new Set(cellTestValues.map((v,i) => `${v||(i+1)*20},${~~(i/boardSize)}`)).size == cellTestValues.length) { // Row
-        testCombinations([...cellTestValues], [...groupTestList]); // Call the function for the next group if there are no row or column issues
-      }
+      cellsByGroup[thisGroup].forEach(c => cellTestValues[c.index] = 0); // Clear the value of each cell in this group
+      let isValidCombo = true;
+      // Place the values of that combo in the cell test values (this is not the actual cells)
+      thisCombo.forEach( (value,orderInGroup) => {
+        const thisIndex = cellsByGroup[thisGroup][orderInGroup].index;
+        cellTestValues[thisIndex] = value;
+        if (indexesByImpact[thisIndex].some(i => cellTestValues[i] == value)) 
+          isValidCombo = false; // Reject if duplicate numbers in a line
+      });
+      // Call the function for the next group if there are no row or column issues
+      if (isValidCombo) testCombinations([...cellTestValues], [...groupTestList]);
     });
+    function seeBoardState() {
+      logToConsole('Board State:');
+      allIndexes.forEach(row => {
+        logToConsole(...cellTestValues.slice(row*boardSize,(row+1)*boardSize).map(i => i||"-"));
+      });
+    }
   }
-  print("Total Nodes Searched:",totalNodeCount);
-  print("Solutions Found:",solutionsFound);
-  print("Finished puzzle generation with seed",thisSeed);
+  logToConsole("Total Nodes Searched:",totalNodeCount);
+  logToConsole("Solutions Found:",solutionsFound);
+  logToConsole("Finished puzzle generation with seed",thisSeed);
   console.log("Total Generation Time:",Date.now()-startTime,"ms");
 
   if (failedGeneration) {
-    print("Multiple solutions found during final search. Generating new board...");
+    logToConsole("Multiple solutions found during final search. Generating new board...");
     return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
   }
   
@@ -452,7 +506,7 @@ function updateCellDisplay() { // Update the cell display
   cells.forEach(thisCell => {
     const allFull = cellsByGroup[thisCell.group].every(c => c.value > 0);
     const resultColor = ( allFull ? ( calcResultForGroup(thisCell.group) == thisCell.result ? color.green : color.red ) : color.black );
-    const valueColor = ( cells.some(c => c.value == thisCell.value && ((c.row == thisCell.row) != (c.col == thisCell.col))) ? color.red : color.black );
+    const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black );
     thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}">${thisCell.value ? thisCell.value : ''}</div>
       <div class="mod-text" style="color:${resultColor}">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
       <div class="candidates">${thisCell.candidates.join(' ')}</div>`;
