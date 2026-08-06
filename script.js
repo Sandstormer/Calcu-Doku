@@ -8,7 +8,10 @@ let clickTarget = null;
 let cells = [];
 let boardSize = 4;
 let cellDimensions = 100; // Pixel size of each cell
-const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)' };
+const color = {
+  green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', 
+  yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)', cell:'rgb(238,238,238)',
+};
 const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
 
 let showConsoleOutput = true;
@@ -520,8 +523,10 @@ function updateCellDisplay() { // Update the cell display
 }
 function updateCellHighlight() { // Update the cell background color
   cells.forEach(thisCell => { // Highlight the cell if it is selected
-    thisCell.style.backgroundColor = "#EEEEEE";
-    if (clickTarget == thisCell) thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : color.yellow );
+    thisCell.style.backgroundColor = color.cell;
+    if (clickTarget == thisCell && document.hasFocus()) {
+      thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : color.yellow );
+    }
   });
 }
 
@@ -536,6 +541,9 @@ function adjustLayout() {
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
     updateCellDisplay();
   }
+}
+function toggleCandidateMode() {
+  isCandidateMode = !isCandidateMode;
 }
 
 document.addEventListener('mousemove', (event) => {
@@ -561,7 +569,22 @@ document.addEventListener('keydown', (event) => {
       clickTarget.value = 0; // Clear the cell's value
     }
   }
-  if (event.key == "c") isCandidateMode = !isCandidateMode;
+  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
+    const thisIndex = clickTarget.index;
+    if (event.key == "ArrowUp" && thisIndex >= boardSize) {
+      clickTarget = cells[thisIndex-boardSize];
+    } else if (event.key == "ArrowDown" && thisIndex < boardSize*(boardSize-1)) {
+      clickTarget = cells[thisIndex+boardSize];
+    } else if (event.key == "ArrowLeft" && thisIndex%boardSize) {
+      clickTarget = cells[thisIndex-1];
+    } else if (event.key == "ArrowRight" && thisIndex%boardSize < boardSize-1) {
+      clickTarget = cells[thisIndex+1];
+    }
+  }
+  if (event.key == "c") {
+    toggleCandidateMode();
+  };
   updateCellDisplay();
 });
-window.addEventListener("resize", () => adjustLayout()); // Run on page load and when resizing the window
+window.addEventListener('blur', updateCellHighlight);
+window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
