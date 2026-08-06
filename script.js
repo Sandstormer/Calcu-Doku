@@ -9,6 +9,7 @@ let cells = [];
 let boardSize = 4;
 let cellDimensions = 100; // Pixel size of each cell
 const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)' };
+const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
 
 let showConsoleOutput = true;
 
@@ -110,6 +111,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
   assignAllGroups();
   function assignAllGroups() {
     let thisGroup = 100;
+    const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
     initializeGroups(0.4,0.2);
     initializeGroups(1,0.3);
     finalizeGroups(0.6 + boardSize/30);
@@ -130,7 +132,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
               const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
               const targetGroup = cells[partnerIndex].group;
               const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-              if (groupSize < boardSize-1 && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
+              if (groupSize < maxGroupSize-1 && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
                 thisCell.group = targetGroup;
               }
             }
@@ -155,7 +157,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
           thisIndex >= boardSize              ? thisIndex-boardSize : -1, // up
           thisIndex%boardSize                 ? thisIndex-1         : -1, // left
           thisIndex < boardSize*(boardSize-1) ? thisIndex+boardSize : -1, // down
-          thisIndex%boardSize  != boardSize-1 ? thisIndex+1         : -1  // right
+          thisIndex%boardSize != boardSize-1  ? thisIndex+1         : -1  // right
         ];
         if (thisCell.group == null) { // Assign a new group to each lone cell
           thisCell.group = thisGroup;
@@ -172,7 +174,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
               const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
               const targetGroup = cells[partnerIndex].group;
               const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-              if (groupSize < boardSize-1 && getRandom() < loneMergeChance**(groupSize-2)) { // Less likely to form huge groups
+              if (groupSize < maxGroupSize-1 && getRandom() < loneMergeChance**(groupSize-2)) { // Less likely to form huge groups
                 thisCell.group = targetGroup;
               }
             }
