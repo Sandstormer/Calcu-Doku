@@ -7,7 +7,8 @@ let cellsByGroup = [];
 let clickTarget = null;
 let cells = [];
 let boardSize = 4;
-const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', black:'rgb(0, 0, 0)' };
+let cellDimensions = 100; // Pixel size of each cell
+const color = { green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)' };
 
 let showConsoleOutput = true;
 
@@ -504,31 +505,35 @@ function calcResultForGroup(thisGroup) {
 
 function updateCellDisplay() { // Update the cell display
   cells.forEach(thisCell => {
-    const allFull = cellsByGroup[thisCell.group].every(c => c.value > 0);
-    const resultColor = ( allFull ? ( calcResultForGroup(thisCell.group) == thisCell.result ? color.green : color.red ) : color.black );
-    const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black );
-    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}">${thisCell.value ? thisCell.value : ''}</div>
-      <div class="mod-text" style="color:${resultColor}">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
-      <div class="candidates">${thisCell.candidates.join(' ')}</div>`;
-    thisCell.style.backgroundColor = "#EEEEEE";
-    if (clickTarget == thisCell) thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : "rgb(240, 230, 140)" );
+    const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
+      ( calcResultForGroup(thisCell.group) == thisCell.result ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
+    const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
+    const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
+    const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
+    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor};">${thisCell.value ? thisCell.value : ''}</div>
+      <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
+      <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
   });
   updateCellHighlight();
 }
 function updateCellHighlight() { // Update the cell background color
-  cells.forEach(thisCell => {
+  cells.forEach(thisCell => { // Highlight the cell if it is selected
     thisCell.style.backgroundColor = "#EEEEEE";
-    if (clickTarget == thisCell) thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : "rgb(240, 230, 140)" );
+    if (clickTarget == thisCell) thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : color.yellow );
   });
 }
 
 function adjustLayout() {
   isMobile = (window.innerWidth <= 768);
   // Set dimensions of everything to be integers, to prevent subpixel rounding
-  const cellDimensions = Math.max(~~((Math.min(window.innerHeight,window.innerWidth)*0.85)/boardSize)-4,50);
-  document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
-  document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
-  document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+  const newCellDimensions = Math.max(~~(((Math.min(window.innerHeight,window.innerWidth)-60)*0.85)/boardSize)-4,50);
+  if (newCellDimensions != cellDimensions) {
+    cellDimensions = newCellDimensions;
+    document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
+    document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
+    document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+    updateCellDisplay();
+  }
 }
 
 document.addEventListener('mousemove', (event) => {
