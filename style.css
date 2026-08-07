@@ -42,7 +42,7 @@ div {
   border: 6px solid black;
   border-radius: 4px;
   margin: -4px;
-  background-color: #EEEEEE;
+  background-color: rgb(238,238,238);
   background-clip: content-box;
   min-height: 50px;
   aspect-ratio: 1/1;

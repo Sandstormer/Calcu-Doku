@@ -30,8 +30,11 @@ function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
   for (let i = 0; i < amount; i++) {
     const thisBoard = generateBoard(thisSize);
+    logBlankLine();
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
+  generateBoard(thisSize, hardestBoard.seed);
+  logBlankLine();
   logToConsole("Finished seed search after",amount,"attempts.");
   logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms");
 }
@@ -40,12 +43,16 @@ function benchmark(amount, thisSize) {
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     generateBoard(thisSize);
+    logBlankLine();
   }
   showConsoleOutput = true;
   console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms");
 }
 function logToConsole(...args) {
   if (showConsoleOutput) console.log(...args);
+}
+function logBlankLine() {
+  console.log();
 }
 
 function generateBoard(newBoardSize = boardSize, thisSeed) {
@@ -135,7 +142,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
               const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
               const targetGroup = cells[partnerIndex].group;
               const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-              if (groupSize < maxGroupSize-1 && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
+              if (groupSize < maxGroupSize && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
                 thisCell.group = targetGroup;
               }
             }
@@ -177,7 +184,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
               const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
               const targetGroup = cells[partnerIndex].group;
               const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-              if (groupSize < maxGroupSize-1 && getRandom() < loneMergeChance**(groupSize-2)) { // Less likely to form huge groups
+              if (groupSize < maxGroupSize && getRandom() < loneMergeChance**(groupSize-2)) { // Less likely to form huge groups
                 thisCell.group = targetGroup;
               }
             }
@@ -210,8 +217,10 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
             && ( ( cells[x+y*boardSize].group == cells[x+w+y*boardSize].group && cells[x+(y+h)*boardSize].group == cells[x+w+(y+h)*boardSize].group ) 
               || ( cells[x+y*boardSize].group == cells[x+(y+h)*boardSize].group && cells[x+w+y*boardSize].group == cells[x+w+(y+h)*boardSize].group ) )
           ) {
-            logToConsole(`Square Degen found: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
-            logToConsole("Generating new board...");
+            logToConsole(`Square Degen found at these indices: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
+            logToConsole("Multiple solutions found in seed",thisSeed)
+            logToConsole("Generating another board...");
+            logBlankLine();
             return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
           }
         }
@@ -424,12 +433,16 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
   logToConsole("Group List:",groupList);
   logToConsole("Cells By Group:",cellsByGroup);
   logToConsole("Combos By Group:",combinationsByGroup);
+  logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
+  logToConsole("Combo Counts Sum:",combinationsByGroup.reduce((total, c) => total + c.length, 0));
+  logToConsole("Combo Counts Multiplied:",combinationsByGroup.reduce((total, c) => total * c.length, 1));
   
   let totalNodeCount = 0;
   let solutionsFound = [];
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
   logToConsole("Sorted Group List:",groupList);
-  indexesByImpact = cells.map(thisCell => thisCell.impactedCells.map(c => c.index));
+  logToConsole("Combos By Sorted Group List:",groupList.map(thisGroup => combinationsByGroup[thisGroup]));
+  const indexesByImpact = cells.map(thisCell => thisCell.impactedCells.map(c => c.index));
   // Test all the combinations of each group, to find how many solutions there are
   testCombinations(cells.map(c => 0), [...groupList]);
   function testCombinations(cellTestValues, groupTestList) {
@@ -461,15 +474,17 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
       });
     }
   }
+
   logToConsole("Total Nodes Searched:",totalNodeCount);
   logToConsole("Solutions Found:",solutionsFound);
-  logToConsole("Finished puzzle generation with seed",thisSeed);
-  console.log("Total Generation Time:",Date.now()-startTime,"ms");
-
   if (failedGeneration) {
-    logToConsole("Multiple solutions found during final search. Generating new board...");
+    logToConsole("Multiple solutions found in seed",thisSeed)
+    logToConsole("Generating another board...");
+    logBlankLine();
     return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
   }
+  // Log the final output of seed and time, even if logging is disabled
+  console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms");
   
   cells.forEach(thisCell => {
     thisCell.value = 0; // Hide the cell values
