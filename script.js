@@ -20,11 +20,7 @@ let rollingSeed = getDailySeed(77); // Daily seed
 // rollingSeed = Date.now(); // Variable seed
 
 generateBoard(boardSize);
-// generateBoard(boardSize, 252644551186571);
-// generateBoard(7, 18052107160292);
-// generateBoard(7, 36609531977608);
-// generateBoard(9, 12088528880364);
-// findHardestBoard(8,7);
+generateBoard(328768089515666);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
@@ -33,7 +29,7 @@ function findHardestBoard(amount, thisSize = boardSize) {
     logBlankLine();
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
-  generateBoard(thisSize, hardestBoard.seed);
+  generateBoard(hardestBoard.seed);
   logBlankLine();
   logToConsole("Finished seed search after",amount,"attempts.");
   logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms");
@@ -55,15 +51,22 @@ function logBlankLine() {
   console.log();
 }
 
-function generateBoard(newBoardSize = boardSize, thisSeed) {
-  const getRandom = initializePRNG(thisSeed);
-  if (thisSeed == null) thisSeed = rollingSeed;
-  const difficultyFactor = 0.5;
-  if (newBoardSize < 3 || newBoardSize > 9) {
-    logToConsole("Invalid board size: Must be between 3 and 9.");
-    return { time:0, seed:thisSeed };
+function generateBoard(seedOrSize = null) {
+  if (seedOrSize != null) {
+    const newBoardSize = seedOrSize % 10;
+    if (newBoardSize < 3 || newBoardSize > 9) {
+      logToConsole("Invalid board size: Must be between 3 and 9.");
+      return { time:0, seed:seedOrSize };
+    }
+    boardSize = newBoardSize;
   }
-  boardSize = newBoardSize;
+  if (seedOrSize == null || seedOrSize < 10) { // If didn't specify seed
+    rollingSeed += boardSize - rollingSeed % 10; // Add board size to rolling seed
+  }
+  const thisSeed = ( seedOrSize > 9 ? seedOrSize : rollingSeed );
+  const fallbackSeed = ( thisSeed == rollingSeed ? null : ( thisSeed + 0x6D2B79F5 - 0x6D2B79F5 % 10 ) );
+  const getRandom = initializePRNG( seedOrSize > 9 ? seedOrSize : null );
+  const difficultyFactor = 0.5;
   logToConsole("Start of puzzle generation with seed",thisSeed);
 
   cells = []; // Clear all cell info
@@ -221,7 +224,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
             logToConsole("Multiple solutions found in seed",thisSeed)
             logToConsole("Generating another board...");
             logBlankLine();
-            return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
+            return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
           }
         }
       }
@@ -481,7 +484,7 @@ function generateBoard(newBoardSize = boardSize, thisSeed) {
     logToConsole("Multiple solutions found in seed",thisSeed)
     logToConsole("Generating another board...");
     logBlankLine();
-    return generateBoard(boardSize); // Terminate the current puzzle and generate a completely new puzzle
+    return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
   }
   // Log the final output of seed and time, even if logging is disabled
   console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms");
