@@ -21,6 +21,7 @@ let rollingSeed = getDailySeed(77); // Daily seed
 
 generateBoard(boardSize);
 generateBoard(328768089515666);
+generateBoard(25554200738496);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
@@ -283,7 +284,7 @@ function generateBoard(seedOrSize = null) {
     // Find candidates for individual cells, based off valid combos for each group 
     groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) => 
       c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
-    logToConsole("Cell Candidates:",cells.map(c => c.candidates));
+    logToConsole("Cell Candidates:",cells.map(c => [...c.candidates]));
     // "Lone Position" Technique: Rows or columns that only have one valid position for a particular number
     for (let row = 0; row < boardSize; row++) {
       for (let number = 1; number < boardSize+1; number++) {
@@ -379,9 +380,13 @@ function generateBoard(seedOrSize = null) {
         }
       }
     }
-    logToConsole("Cell Candidates After Pass:",cells.map(c => c.candidates));
+    logToConsole("Cell Candidates After Pass:",cells.map(c => [...c.candidates]));
     // Update the valid combos for each group, based on new findings regarding individual candidates
-    combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup));
+    combinationsByGroup = groupList.map( thisGroup => 
+      combinationsByGroup[thisGroup].filter( thisCombo =>
+        thisCombo.every( (thisNum,thisIndex) => cellsByGroup[thisGroup][thisIndex].candidates.includes(thisNum) )
+      )
+    );
     logToConsole("Combos By Group:",combinationsByGroup);
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
@@ -390,17 +395,18 @@ function generateBoard(seedOrSize = null) {
       logToConsole("Running Dead End technique in Pass",techniquesPassCount);
       groupList.filter(thisGroup => combinationsByGroup[thisGroup].length < 20).forEach(thisGroup => // For each group that isn't too big
         combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter(thisCombo => { // Remove combos which are a dead end
-        cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) ); // Reset all cell values, but fill in cells that only have one candidate
-        cellsByGroup[thisGroup].forEach((c,i) => c.value = thisCombo[i]); // Fill in the cells from this combo
-        const isValidCombo = groupList.filter(secGroup => secGroup != thisGroup).every(g => // Check all other groups
-          combinationsByGroup[g].length > 20 || // Short-circuit if secondary group is too big
-          combinationsByGroup[g].some(secCombo => // Must have at least one valid combo left
-            // Every cell in that combo must have no conflicts in the row or column
-            cellsByGroup[g].every((secCell,i) => !secCell.impactedCells.some(c => c.value == secCombo[i]))
-        ));
-        if (!isValidCombo) logToConsole("Found dead end combo",thisCombo,"in group",thisGroup);
-        return isValidCombo;
-      }));
+          cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) ); // Reset all cell values, but fill in cells that only have one candidate
+          cellsByGroup[thisGroup].forEach((c,i) => c.value = thisCombo[i]); // Fill in the cells from this combo
+          const isValidCombo = groupList.filter(secGroup => secGroup != thisGroup).every(g => // Check all other groups
+            combinationsByGroup[g].length > 20 || // Short-circuit if secondary group is too big
+            combinationsByGroup[g].some(secCombo => // Must have at least one valid combo left
+              // Every cell in that combo must have no conflicts in the row or column
+              cellsByGroup[g].every((secCell,i) => !secCell.impactedCells.some(c => c.value == secCombo[i]))
+          ));
+          if (!isValidCombo) logToConsole("Found dead end combo",...thisCombo,"in group",thisGroup);
+          return isValidCombo;
+        })
+      );
     }
     // Report the end of this pass
     logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
