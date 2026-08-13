@@ -21,7 +21,7 @@ let rollingSeed = getDailySeed(77); // Daily seed
 
 generateBoard(boardSize);
 generateBoard(328768089515666);
-generateBoard(25554200738496);
+// generateBoard(25554200738496);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
@@ -249,6 +249,7 @@ function generateBoard(seedOrSize = null) {
       const groupSize = cells.filter(c => c.group === thisCell.group).length;
       if (groupSize == 1) {
         thisCell.operator = 0;
+        thisCell.candidates = [thisCell.value];
       } else if (groupSize == 2) {
         const partner = cells.filter(c => c.group === thisCell.group && c != thisCell)[0];
         const divided = (partner.value > thisCell.value ? partner.value / thisCell.value : thisCell.value / partner.value);
@@ -269,15 +270,41 @@ function generateBoard(seedOrSize = null) {
       cells.filter(c => c.group == thisCell.group).forEach(c => c.operator = thisCell.operator);
     }
   });
-
-  logToConsole("Starting Basic Techniques. Current time is",Date.now()-startTime,"ms.");
   cells.forEach(thisCell => thisCell.result = calcResultForGroup(thisCell.group)); // Determine the equation results
+  // Reset all cell values, but fill in cells that only have one candidate
+  cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
+
+  logToConsole("Starting to generate initial group combos. Current time is",Date.now()-startTime,"ms.");
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
-  logToConsole("Generated initial group combos. Current time is",Date.now()-startTime,"ms.");
+  function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
+    const theseCombos = [];
+    function build(cellValuesInCombo, thisGroup) {
+      if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
+        if (calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result) { // If math result matches
+          theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
+        }
+        return;
+      }
+      const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length];
+      thisCell.candidates.forEach(thisNum => { // Only try numbers in the candidate list
+        if (!thisCell.impactedCells.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
+          thisCell.value = thisNum; // Place the latest value into the actual cell
+          build([...cellValuesInCombo,thisNum], thisGroup); // Continue building a valid combo for this group
+        }
+      });
+      // Clear the cell value, so it doesn't remain once the function has walked back
+      thisCell.value = ( thisCell.candidates.length == 1 ? thisCell.candidates[0] : 0 );
+    }
+    build([], thisGroup);
+    return theseCombos;
+  }
+  logToConsole("Finished generating initial group combos. Current time is",Date.now()-startTime,"ms.");
   logToConsole("Combos By Group:",combinationsByGroup);
+
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   let totalCombinationsPrev = null;
   let techniquesPassCount = 1;
+  logToConsole("Starting Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
   // Loop the basic techniques until nothing new is found
   while (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) {
     totalCombinationsPrev = totalCombinations;
@@ -390,19 +417,19 @@ function generateBoard(seedOrSize = null) {
     logToConsole("Combos By Group:",combinationsByGroup);
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
-    totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+    totalCombinations = combinationsByGroup.reduce( (total, theseCombos) => total + theseCombos.length, 0);
     if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
       logToConsole("Running Dead End technique in Pass",techniquesPassCount);
-      groupList.filter(thisGroup => combinationsByGroup[thisGroup].length < 20).forEach(thisGroup => // For each group that isn't too big
-        combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter(thisCombo => { // Remove combos which are a dead end
-          cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) ); // Reset all cell values, but fill in cells that only have one candidate
-          cellsByGroup[thisGroup].forEach((c,i) => c.value = thisCombo[i]); // Fill in the cells from this combo
-          const isValidCombo = groupList.filter(secGroup => secGroup != thisGroup).every(g => // Check all other groups
-            combinationsByGroup[g].length > 20 || // Short-circuit if secondary group is too big
-            combinationsByGroup[g].some(secCombo => // Must have at least one valid combo left
-              // Every cell in that combo must have no conflicts in the row or column
-              cellsByGroup[g].every((secCell,i) => !secCell.impactedCells.some(c => c.value == secCombo[i]))
-          ));
+      groupList.filter( thisGroup => combinationsByGroup[thisGroup].length < 20).forEach( thisGroup => // For each group that isn't too big
+        combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter( thisCombo => { // Remove combos which are a dead end
+          const isValidCombo = groupList.filter( secGroup => secGroup != thisGroup).every( secGroup => // Check all other groups
+            combinationsByGroup[secGroup].length > 20 || // Short-circuit if secondary group is too big
+            combinationsByGroup[secGroup].some( secCombo => // Must have at least one valid combo left
+              cellsByGroup[secGroup].every( (secCell,secIndex) => // Every cell in that combo must have no conflicts with the main combo
+                !cellsByGroup[thisGroup].some( (c,thisIndex) => thisCombo[thisIndex] == secCombo[secIndex] && ( c.row == secCell.row || c.col == secCell.col ) )
+              )
+            )
+          );
           if (!isValidCombo) logToConsole("Found dead end combo",...thisCombo,"in group",thisGroup);
           return isValidCombo;
         })
@@ -414,30 +441,6 @@ function generateBoard(seedOrSize = null) {
     logToConsole("Finished Pass",techniquesPassCount++,"of Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
   }
   logToConsole("Finished All Basic Techniques in",Date.now()-startTime,"ms");
-
-  function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
-    const theseCombos = [];
-    // Reset all cell values, but fill in cells that only have one candidate
-    cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
-    function build(cellValuesInCombo, thisGroup) {
-      if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
-        if (calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result) { // If math result matches
-          theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
-        }
-        return;
-      }
-      const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length];
-      thisCell.candidates.forEach(thisNum => { // Only try numbers in the candidate list
-        if (!thisCell.impactedCells.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
-          thisCell.value = thisNum; // Place the latest value into the actual cell
-          build([...cellValuesInCombo,thisNum], thisGroup); // Continue building a valid combo for this group
-        }
-      });
-      thisCell.value = 0; // Clear the value, so it doesn't remain once the function has walked back
-    }
-    build([], thisGroup);
-    return theseCombos;
-  }
 
   logToConsole("Group List:",groupList);
   logToConsole("Cells By Group:",cellsByGroup);
