@@ -465,19 +465,15 @@ function generateBoard(seedOrSize = null) {
     }
     if (failedGeneration) return; // Terminate all branches if there are already 2 solutions
     const thisGroup = groupTestList.pop();
+    const indexesInThisGroup = indexesByGroup[thisGroup];
+    const indexesByImpactInThisGroup = indexesByGroupByImpact[thisGroup];
     combinationsByGroup[thisGroup].forEach( thisCombo => { // Loop through each combo in this group
       totalNodeCount++; // Track how many nodes have been searched
-      cellsByGroup[thisGroup].forEach(c => cellTestValues[c.index] = 0); // Clear the value of each cell in this group
-      let isValidCombo = true;
       // Place the values of that combo in the cell test values (this is not the actual cells)
-      thisCombo.forEach( (value,orderInGroup) => {
-        const thisIndex = cellsByGroup[thisGroup][orderInGroup].index;
-        cellTestValues[thisIndex] = value;
-        if (indexesByImpact[thisIndex].some(i => cellTestValues[i] == value)) 
-          isValidCombo = false; // Reject if duplicate numbers in a line
-      });
+      thisCombo.forEach( (value,orderInGroup) => cellTestValues[indexesInThisGroup[orderInGroup]] = value );
       // Call the function for the next group if there are no row or column issues
-      if (isValidCombo) testCombinations([...cellTestValues], [...groupTestList]);
+      if (!thisCombo.some( (value,orderInGroup) => indexesByImpactInThisGroup[orderInGroup].some(i => cellTestValues[i] == value) )) 
+        testCombinations([...cellTestValues], [...groupTestList]);
     });
     function seeBoardState() {
       logToConsole('Board State:');
