@@ -110,7 +110,9 @@ function generateBoard(seedOrSize = null) {
         newCell.group = null;
         newCell.candidates = [...allNumsToGive];
         newCell.isLeader = false;
-        newCell.addEventListener('click', () => clickTarget = newCell);
+        newCell.addEventListener('click',     () => updateCellHighlight(newCell));
+        newCell.addEventListener('mouseover', () => updateCellHighlight(newCell));
+        newCell.addEventListener('mouseout',  () => updateCellHighlight());
         newRow.appendChild(newCell);
         cells.push(newCell);
       }
@@ -493,7 +495,6 @@ function generateBoard(seedOrSize = null) {
   console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms");
   
   cells.forEach(thisCell => {
-    thisCell.addEventListener('mouseover', () => clickTarget = thisCell);
     thisCell.value = 0; // Hide the cell values
     thisCell.candidates = [];
     // thisCell.value = thisCell.answer; // Show answers
@@ -541,15 +542,13 @@ function updateCellDisplay() { // Update the cell display
       <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
       <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
   });
-  updateCellHighlight();
+  updateCellHighlight(clickTarget);
 }
-function updateCellHighlight() { // Update the cell background color
-  cells.forEach(thisCell => { // Highlight the cell if it is selected
-    thisCell.style.backgroundColor = color.cell;
-    if (clickTarget == thisCell && document.hasFocus()) {
-      thisCell.style.backgroundColor = ( isCandidateMode ? color.purple : color.yellow );
-    }
-  });
+function updateCellHighlight(newClickTarget = null) { // Update the cell background color
+  clickTarget = newClickTarget;
+  cells.forEach(thisCell => // Highlight the cell if it is selected
+    thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isCandidateMode ? color.purple : color.yellow ) : color.cell )
+  );
 }
 
 function adjustLayout() {
@@ -568,9 +567,6 @@ function toggleCandidateMode() {
   isCandidateMode = !isCandidateMode;
 }
 
-document.addEventListener('mousemove', (event) => {
-  updateCellHighlight();
-});
 document.addEventListener('keydown', (event) => {
   [1,2,3,4,5,6,7,8,9].forEach(number => {
     if (event.key == number && number <= boardSize && clickTarget) {
@@ -608,5 +604,4 @@ document.addEventListener('keydown', (event) => {
   };
   updateCellDisplay();
 });
-window.addEventListener('blur', updateCellHighlight);
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
