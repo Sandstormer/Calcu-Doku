@@ -3,9 +3,9 @@ const sidebarContainer = document.getElementById("sidebar-container");
 const opSymbols = ['','+','×','−','÷'];
 let isMobile = false; // Whether display is altered for mobile devices
 let isCandidateMode = false; // Whether "pencil mode" is activated
-let cellsByGroup = [];
-let clickTarget = null;
-let cells = [];
+let cells = []; // List of all cell elements
+let cellsByGroup = []; // Sublists of all cells, arranged by group
+let clickTarget = null; // Which cell is selected for number entry
 let boardSize = 4;
 let cellDimensions = 100; // Pixel size of each cell
 const color = {
@@ -16,11 +16,11 @@ const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
 
 let showConsoleOutput = true;
 
-let rollingSeed = getDailySeed(77); // Daily seed
+let rollingSeed = getDailySeed(); // Daily seed
 // rollingSeed = Date.now(); // Variable seed
 
 generateBoard(boardSize);
-generateBoard(328768089515666);
+// generateBoard(328768089515666);
 // generateBoard(25554200738496);
 
 function findHardestBoard(amount, thisSize = boardSize) {
@@ -67,7 +67,6 @@ function generateBoard(seedOrSize = null) {
   const thisSeed = ( seedOrSize > 9 ? seedOrSize : rollingSeed );
   const fallbackSeed = ( thisSeed == rollingSeed ? null : ( thisSeed + 0x6D2B79F5 - 0x6D2B79F5 % 10 ) );
   const getRandom = initializePRNG( seedOrSize > 9 ? seedOrSize : null );
-  const difficultyFactor = 0.5;
   logToConsole("Start of puzzle generation with seed",thisSeed);
 
   cells = []; // Clear all cell info
@@ -122,91 +121,88 @@ function generateBoard(seedOrSize = null) {
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
   cells.forEach(thisCell => thisCell.impactedCells = cells.filter(c => c != thisCell && (c.row == thisCell.row) != (c.col == thisCell.col)));
 
-  assignAllGroups();
-  function assignAllGroups() {
-    let thisGroup = 100;
-    const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
-    initializeGroups(0.4,0.2);
-    initializeGroups(1,0.3);
-    finalizeGroups(0.6 + boardSize/30);
-    sequentializeGroups();
-    function initializeGroups(assignChance = 1, mergeChance = 0) { // Cluster the cells into groups **************
-      cells.forEach((thisCell, thisIndex) => {
-        const partners = [ // Stay within the limits of the board
-          thisIndex >= boardSize              ? thisIndex-boardSize : -1, // up
-          thisIndex%boardSize                 ? thisIndex-1         : -1, // left
-          thisIndex < boardSize*(boardSize-1) ? thisIndex+boardSize : -1, // down
-          thisIndex%boardSize  != boardSize-1 ? thisIndex+1         : -1  // right
-        ];
-        if (getRandom() < mergeChance) { // Merge current cell into the group of an adjacent cell
-          // Can only merge if current cell has no group, or if in a group smaller than 3 (to avoid splitting groups into non-adjacent cells)
-          if ( thisCell.group == null || cells.filter(c => c.group === thisCell.group).length < 3 ) {
-            const mergeableIndexes = partners.filter((value) => value >= 0 && cells[value].group); // Partner must have a group
-            if (mergeableIndexes.length) { // If there is a valid partner
-              const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
-              const targetGroup = cells[partnerIndex].group;
-              const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-              if (groupSize < maxGroupSize && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
-                thisCell.group = targetGroup;
-              }
+  let thisGroup = 100;
+  const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
+  initializeGroups(0.4,0.2);
+  initializeGroups(1,0.3);
+  finalizeGroups(0.6 + boardSize/30);
+  sequentializeGroups();
+  function initializeGroups(assignChance = 1, mergeChance = 0) { // Cluster the cells into groups **************
+    cells.forEach((thisCell, thisIndex) => {
+      const partners = [ // Stay within the limits of the board
+        thisIndex >= boardSize              ? thisIndex-boardSize : -1, // up
+        thisIndex%boardSize                 ? thisIndex-1         : -1, // left
+        thisIndex < boardSize*(boardSize-1) ? thisIndex+boardSize : -1, // down
+        thisIndex%boardSize  != boardSize-1 ? thisIndex+1         : -1  // right
+      ];
+      if (getRandom() < mergeChance) { // Merge current cell into the group of an adjacent cell
+        // Can only merge if current cell has no group, or if in a group smaller than 3 (to avoid splitting groups into non-adjacent cells)
+        if ( thisCell.group == null || cells.filter(c => c.group === thisCell.group).length < 3 ) {
+          const mergeableIndexes = partners.filter((value) => value >= 0 && cells[value].group); // Partner must have a group
+          if (mergeableIndexes.length) { // If there is a valid partner
+            const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
+            const targetGroup = cells[partnerIndex].group;
+            const groupSize = cells.filter(cell => cell.group === targetGroup).length;
+            if (groupSize < maxGroupSize && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
+              thisCell.group = targetGroup;
             }
           }
         }
-        if (getRandom() < assignChance) { // Make new group with a partner
-          if (thisCell.group == null) { // If the current cell has no group
-            const blankIndexes = partners.filter((value) => value >= 0 && cells[value].group == null); // Partner must have no group
-            if (blankIndexes.length) { // If there is a valid partner
-              const partnerIndex = blankIndexes[Math.floor(getRandom() * blankIndexes.length)];
-              thisCell.group = thisGroup;
-              cells[partnerIndex].group = thisGroup;
-              thisGroup += 1;
+      }
+      if (getRandom() < assignChance) { // Make new group with a partner
+        if (thisCell.group == null) { // If the current cell has no group
+          const blankIndexes = partners.filter((value) => value >= 0 && cells[value].group == null); // Partner must have no group
+          if (blankIndexes.length) { // If there is a valid partner
+            const partnerIndex = blankIndexes[Math.floor(getRandom() * blankIndexes.length)];
+            thisCell.group = thisGroup;
+            cells[partnerIndex].group = thisGroup;
+            thisGroup += 1;
+          }
+        }
+      }
+    }); 
+  }
+  function finalizeGroups(soloMergeChance = 0.8) { // Final pass to clean up groups **************
+    cells.forEach((thisCell, thisIndex) => {
+      const partners = [ // Stay within the limits of the board
+        thisIndex >= boardSize              ? thisIndex-boardSize : -1, // up
+        thisIndex%boardSize                 ? thisIndex-1         : -1, // left
+        thisIndex < boardSize*(boardSize-1) ? thisIndex+boardSize : -1, // down
+        thisIndex%boardSize != boardSize-1  ? thisIndex+1         : -1  // right
+      ];
+      if (thisCell.group == null) { // Assign a new group to each solo cell
+        thisCell.group = thisGroup;
+        thisGroup += 1;
+      }
+      if (cells.filter(cell => cell.group === thisCell.group).length == 1) { // If the current cell is in a solo group
+        const soloPartners = partners.filter(i => i != -1 && ( cells[i].group == null || cells.filter(cell => cell.group === cells[i].group).length == 1 ) );
+        if (soloPartners.length) { // If there is an adjacent cell in a solo group, always merge with it
+          const partnerIndex = soloPartners[Math.floor(getRandom() * soloPartners.length)];
+          cells[partnerIndex].group = thisCell.group;
+        } else if (getRandom() < soloMergeChance) { // Chance to merge current solo cell into group of an adjacent cell
+          const mergeableIndexes = partners.filter(i => i != -1 && cells[i].group); // Partner must have a group
+          if (mergeableIndexes.length) { // If there is a valid partner
+            const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
+            const targetGroup = cells[partnerIndex].group;
+            const groupSize = cells.filter(cell => cell.group === targetGroup).length;
+            if (groupSize < maxGroupSize && getRandom() < soloMergeChance**(groupSize-2)) { // Less likely to form huge groups
+              thisCell.group = targetGroup;
             }
           }
         }
-      }); 
-    }
-    function finalizeGroups(loneMergeChance = 0.8) { // Final pass to clean up groups **************
-      cells.forEach((thisCell, thisIndex) => {
-        const partners = [ // Stay within the limits of the board
-          thisIndex >= boardSize              ? thisIndex-boardSize : -1, // up
-          thisIndex%boardSize                 ? thisIndex-1         : -1, // left
-          thisIndex < boardSize*(boardSize-1) ? thisIndex+boardSize : -1, // down
-          thisIndex%boardSize != boardSize-1  ? thisIndex+1         : -1  // right
-        ];
-        if (thisCell.group == null) { // Assign a new group to each lone cell
-          thisCell.group = thisGroup;
-          thisGroup += 1;
-        }
-        if (cells.filter(cell => cell.group === thisCell.group).length == 1) { // If the current cell is in a lone group
-          const lonePartners = partners.filter(i => i != -1 && ( cells[i].group == null || cells.filter(cell => cell.group === cells[i].group).length == 1 ) );
-          if (lonePartners.length) { // If there is an adjacent cell in a lone group, always merge with it
-            const partnerIndex = lonePartners[Math.floor(getRandom() * lonePartners.length)];
-            cells[partnerIndex].group = thisCell.group;
-          } else if (getRandom() < loneMergeChance) { // Chance to merge current lone cell into group of an adjacent cell
-            const mergeableIndexes = partners.filter(i => i != -1 && cells[i].group); // Partner must have a group
-            if (mergeableIndexes.length) { // If there is a valid partner
-              const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
-              const targetGroup = cells[partnerIndex].group;
-              const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-              if (groupSize < maxGroupSize && getRandom() < loneMergeChance**(groupSize-2)) { // Less likely to form huge groups
-                thisCell.group = targetGroup;
-              }
-            }
-          }
-        }
-      }); 
-    }
-    function sequentializeGroups() { // Re-order the group numbers to start at 0, and not skip any numbers
-      if (thisGroup > 100) thisGroup = 0;
-      cells.forEach(thisCell => {
-        if (thisCell.group >= 100) {
-          const groupToReplace = thisCell.group;
-          cells.filter(c => c.group == groupToReplace).forEach(c => c.group = thisGroup);
-          thisGroup++;
-        }
-      });
-      groupList = [...Array(thisGroup).keys()];
-    }
+      }
+    }); 
+  }
+  function sequentializeGroups() { // Re-order the group numbers to start at 0, and not skip any numbers
+    if (thisGroup > 100) thisGroup = 0;
+    cells.forEach(thisCell => {
+      if (thisCell.group >= 100) {
+        const groupToReplace = thisCell.group;
+        cells.filter(c => c.group == groupToReplace).forEach(c => c.group = thisGroup);
+        thisGroup++;
+      }
+    });
+    groupList = [...Array(thisGroup).keys()];
   }
   logToConsole("Finished assigning groups");
   
@@ -239,7 +235,7 @@ function generateBoard(seedOrSize = null) {
     if (thisCell.row != boardSize-1 && cells[i+boardSize].group == thisCell.group) thisCell.classList.add("no-bot");
     if (thisCell.col != 0           && cells[i-1].group == thisCell.group)         thisCell.classList.add("no-left");
     if (thisCell.col != boardSize-1 && cells[i+1].group == thisCell.group)         thisCell.classList.add("no-right");
-    cells.filter(c => c.group === thisCell.group)[0].isLeader = true;
+    cells.filter(c => c.group === thisCell.group)[0].isLeader = true; // Only the first cell in each group shows the math symbol
   });
   
   // Assign the operators to each group
@@ -266,13 +262,14 @@ function generateBoard(seedOrSize = null) {
           thisCell.operator = 1; // Set to add
         }
       }
-      // Assign operator to other cells in the same group
-      cells.filter(c => c.group == thisCell.group).forEach(c => c.operator = thisCell.operator);
+      cells.filter(c => c.group == thisCell.group).forEach(c => { // For other cells in same group
+        c.operator = thisCell.operator // Assign operator
+        c.result = calcResultForGroup(thisCell.group) // Determine the equation results
+      });
     }
   });
-  cells.forEach(thisCell => thisCell.result = calcResultForGroup(thisCell.group)); // Determine the equation results
-  // Reset all cell values, but fill in cells that only have one candidate
-  cells.forEach(c => c.value = ( c.candidates.length == 1 ? c.candidates[0] : 0 ) );
+  // Clear all cell values that aren't in a solo group
+  cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
 
   logToConsole("Starting to generate initial group combos. Current time is",Date.now()-startTime,"ms.");
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
@@ -453,8 +450,9 @@ function generateBoard(seedOrSize = null) {
   let solutionsFound = [];
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
   logToConsole("Sorted Group List:",groupList);
-  logToConsole("Combos By Sorted Group List:",groupList.map(thisGroup => combinationsByGroup[thisGroup]));
-  const indexesByImpact = cells.map(thisCell => thisCell.impactedCells.map(c => c.index));
+  logToConsole("Combos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]) );
+  const indexesByGroup = cellsByGroup.map( thisGroup => thisGroup.map(c => c.index) );
+  const indexesImpactByGroup = cellsByGroup.map( thisGroup => thisGroup.map(c => c.impactedCells.map(c => c.index)) );
   // Test all the combinations of each group, to find how many solutions there are
   testCombinations(cells.map(c => 0), [...groupList]);
   function testCombinations(cellTestValues, groupTestList) {
@@ -466,7 +464,7 @@ function generateBoard(seedOrSize = null) {
     if (failedGeneration) return; // Terminate all branches if there are already 2 solutions
     const thisGroup = groupTestList.pop();
     const indexesInThisGroup = indexesByGroup[thisGroup];
-    const indexesByImpactInThisGroup = indexesByGroupByImpact[thisGroup];
+    const indexesByImpactInThisGroup = indexesImpactByGroup[thisGroup];
     combinationsByGroup[thisGroup].forEach( thisCombo => { // Loop through each combo in this group
       totalNodeCount++; // Track how many nodes have been searched
       // Place the values of that combo in the cell test values (this is not the actual cells)
@@ -495,9 +493,10 @@ function generateBoard(seedOrSize = null) {
   console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms");
   
   cells.forEach(thisCell => {
-    thisCell.value = 0; // Hide the cell values
     thisCell.addEventListener('mouseover', () => clickTarget = thisCell);
+    thisCell.value = 0; // Hide the cell values
     thisCell.candidates = [];
+    // thisCell.value = thisCell.answer; // Show answers
   });
   adjustLayout();
   updateCellDisplay();
