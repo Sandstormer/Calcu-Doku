@@ -303,8 +303,9 @@ function generateBoard(seedOrSize = null) {
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   let totalCombinationsPrev = null;
   let techniquesPassCount = 1;
-  logToConsole("Starting Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
-  // Loop the basic techniques until nothing new is found
+  logToConsole("Starting Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
+  // Loop the techniques to reduce the possibilities for each cell and each group
+  // These are basic techniques that a human would use to solve a puzzle
   while (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) {
     totalCombinationsPrev = totalCombinations;
     // Find candidates for individual cells, based off valid combos for each group 
@@ -408,15 +409,18 @@ function generateBoard(seedOrSize = null) {
     }
     logToConsole("Cell Candidates After Pass:",cells.map(c => [...c.candidates]));
     // Update the valid combos for each group, based on new findings regarding individual candidates
-    combinationsByGroup = groupList.map( thisGroup => 
-      combinationsByGroup[thisGroup].filter( thisCombo =>
+    combinationsByGroup = combinationsByGroup.map( (theseCombos,thisGroup) =>
+      theseCombos.filter( thisCombo =>
         thisCombo.every( (thisNum,thisIndex) => cellsByGroup[thisGroup][thisIndex].candidates.includes(thisNum) )
       )
     );
+    // Report the end of this pass
     logToConsole("Combos By Group:",combinationsByGroup);
+    logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
+    totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+    logToConsole("Finished Pass",techniquesPassCount++,"of Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
-    totalCombinations = combinationsByGroup.reduce( (total, theseCombos) => total + theseCombos.length, 0);
     if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
       logToConsole("Running Dead End technique in Pass",techniquesPassCount);
       groupList.filter( thisGroup => combinationsByGroup[thisGroup].length < 20).forEach( thisGroup => // For each group that isn't too big
@@ -433,13 +437,13 @@ function generateBoard(seedOrSize = null) {
           return isValidCombo;
         })
       );
+      logToConsole("Combos By Group:",combinationsByGroup);
+      logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
+      totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+      logToConsole("Finished Dead End Technique after Pass",techniquesPassCount-1,"There are",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
     }
-    // Report the end of this pass
-    logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
-    totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-    logToConsole("Finished Pass",techniquesPassCount++,"of Basic Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
   }
-  logToConsole("Finished All Basic Techniques in",Date.now()-startTime,"ms");
+  logToConsole("Finished All Techniques in",Date.now()-startTime,"ms");
 
   logToConsole("Group List:",groupList);
   logToConsole("Cells By Group:",cellsByGroup);
@@ -455,7 +459,9 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Combos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]) );
   const indexesByGroup = cellsByGroup.map( thisGroup => thisGroup.map(c => c.index) );
   const indexesImpactByGroup = cellsByGroup.map( thisGroup => thisGroup.map(c => c.impactedCells.map(c => c.index)) );
-  // Test all the combinations of each group, to find how many solutions there are
+  // This is the final recursive search, which solves the puzzle
+  // It tests all the combinations of each group, terminating branches which are invalid
+  // If multiple solutions are found, it terminates early, and generates a new puzzle
   testCombinations(cells.map(c => 0), [...groupList]);
   function testCombinations(cellTestValues, groupTestList) {
     if (groupTestList.length == 0) {
