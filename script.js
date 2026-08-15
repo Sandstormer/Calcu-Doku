@@ -214,8 +214,8 @@ function generateBoard(seedOrSize = null) {
   // This is a quick identifier of multiple solutions                                [ 3 , 1 ]
   for (let x = 0; x < boardSize-1; x++) {
     for (let y = 0; y < boardSize-1; y++) {
-      for (let w = 1; w < boardSize-1-x; w++) {
-        for (let h = 1; h < boardSize-1-y; h++) {
+      for (let w = 1; w < boardSize-x; w++) {
+        for (let h = 1; h < boardSize-y; h++) {
           if ( cells[x  +y*boardSize].value == cells[x+w+(y+h)*boardSize].value
             && cells[x+w+y*boardSize].value == cells[x  +(y+h)*boardSize].value
             && ( ( cells[x+y*boardSize].group == cells[x+w+y*boardSize].group && cells[x+(y+h)*boardSize].group == cells[x+w+(y+h)*boardSize].group ) 
