@@ -21,10 +21,14 @@ let rollingSeed = getDailySeed(); // Daily seed
 
 generateBoard(boardSize);
 // generateBoard(328768089515666);
+// generateBoard(131907732802949);
+// generateBoard(4298879479096); // Multi solutions
+// benchmark(20,8);
 // generateBoard(25554200738496);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
+  const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     const thisBoard = generateBoard(thisSize);
     logBlankLine();
@@ -32,10 +36,10 @@ function findHardestBoard(amount, thisSize = boardSize) {
   }
   generateBoard(hardestBoard.seed);
   logBlankLine();
-  logToConsole("Finished seed search after",amount,"attempts.");
-  logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms");
+  logToConsole("Finished seed search after",amount,"attempts. Total time of",Date.now()-startBenchTime,"ms.");
+  logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms.");
 }
-function benchmark(amount, thisSize) {
+function benchmark(amount, thisSize = boardSize) {
   showConsoleOutput = false;
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
@@ -43,13 +47,14 @@ function benchmark(amount, thisSize) {
     logBlankLine();
   }
   showConsoleOutput = true;
-  console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms");
+  console.log("Finished benchmark with total time of",Date.now()-startBenchTime,"ms.");
+  console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms.");
 }
 function logToConsole(...args) {
   if (showConsoleOutput) console.log(...args);
 }
 function logBlankLine() {
-  console.log();
+  if (showConsoleOutput) console.log();
 }
 
 function generateBoard(seedOrSize = null) {
@@ -78,12 +83,12 @@ function generateBoard(seedOrSize = null) {
   const allIndexes = [...Array(boardSize).keys()];
   assignNumbers();
   function assignNumbers() {
+    let numberAssignRetryCount = 0;
     for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
       const newRow = document.createElement('div'); 
       newRow.className = 'row';
       boardContainer.appendChild(newRow);
-      let rowAssignRetryCount = 0;
-      for (let j = 0; j < boardSize && rowAssignRetryCount < 1000; j++) {
+      for (let j = 0; j < boardSize && numberAssignRetryCount < 1000; j++) {
         const newCell = document.createElement('div'); 
         newCell.className = 'cell';
         newCell.row = i;
@@ -101,8 +106,7 @@ function generateBoard(seedOrSize = null) {
             j--;
           }
           j = -1;
-          rowAssignRetryCount++;
-          logToConsole(`Retried assigning numbers to row. Attempt ${rowAssignRetryCount}.`);
+          numberAssignRetryCount++;
           continue; // Restart the row from column 0
         }
         newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
@@ -117,6 +121,7 @@ function generateBoard(seedOrSize = null) {
         cells.push(newCell);
       }
     }
+    logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.");
   }
   logToConsole("Cells after number placement:",cells);
   const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
@@ -206,7 +211,7 @@ function generateBoard(seedOrSize = null) {
     });
     groupList = [...Array(thisGroup).keys()];
   }
-  logToConsole("Finished assigning groups");
+  logToConsole("Finished assigning groups. Current time is",Date.now()-startTime,"ms.");
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
   // This is a quick identifier of multiple solutions                                [ 3 , 1 ]
@@ -422,14 +427,15 @@ function generateBoard(seedOrSize = null) {
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
     if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
-      logToConsole("Running Dead End technique in Pass",techniquesPassCount);
+      logToConsole("Running Dead End technique after Pass",techniquesPassCount-1);
       groupList.filter( thisGroup => combinationsByGroup[thisGroup].length < 20).forEach( thisGroup => // For each group that isn't too big
         combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter( thisCombo => { // Remove combos which are a dead end
           const isValidCombo = groupList.filter( secGroup => secGroup != thisGroup).every( secGroup => // Check all other groups
             combinationsByGroup[secGroup].length > 20 || // Short-circuit if secondary group is too big
             combinationsByGroup[secGroup].some( secCombo => // Must have at least one valid combo left
               cellsByGroup[secGroup].every( (secCell,secIndex) => // Every cell in that combo must have no conflicts with the main combo
-                !cellsByGroup[thisGroup].some( (c,thisIndex) => thisCombo[thisIndex] == secCombo[secIndex] && ( c.row == secCell.row || c.col == secCell.col ) )
+                !cellsByGroup[thisGroup].some( (thisCell,thisIndex) => 
+                  thisCombo[thisIndex] == secCombo[secIndex] && ( thisCell.row == secCell.row || thisCell.col == secCell.col ) )
               )
             )
           );
@@ -443,7 +449,7 @@ function generateBoard(seedOrSize = null) {
       logToConsole("Finished Dead End Technique after Pass",techniquesPassCount-1,"There are",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
     }
   }
-  logToConsole("Finished All Techniques in",Date.now()-startTime,"ms");
+  logToConsole("Finished All Techniques. Current time is",Date.now()-startTime,"ms.");
 
   logToConsole("Group List:",groupList);
   logToConsole("Cells By Group:",cellsByGroup);
@@ -451,35 +457,88 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
   logToConsole("Combo Counts Sum:",combinationsByGroup.reduce((total, c) => total + c.length, 0));
   logToConsole("Combo Counts Multiplied:",combinationsByGroup.reduce((total, c) => total * c.length, 1));
-  
-  let totalNodeCount = 0;
-  let solutionsFound = [];
+
+  const indexesByGroup = cellsByGroup.map(
+    // Input:  [thisGroup]
+    // Output: [list of indexes of cells in that group] (like cellsByGroup, but index values instead of actual elements)
+    cellsInThisGroup => cellsInThisGroup.map(c => c.index)
+  );
+  const indexesImpactByGroup = cellsByGroup.map( cellsInThisGroup => cellsInThisGroup.map(thisCell =>
+    // Input:  [thisGroup][cellOrderInGroup]
+    // Output: [list of indexes of cells in other groups which are impacted by this cell]
+    thisCell.impactedCells.filter(c => c.group != thisCell.group).map(c => c.index))
+  );
+  const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
+    // Input:  [thisGroup]
+    // Output: [list of indexes of other groups that are impacted by this group]
+    thisGroup != secGroup && cellsByGroup[secGroup].some( secCell => cellsInThisGroup.some( thisCell => 
+      thisCell.row == secCell.row || thisCell.col == secCell.col // List of groups where any cells are in the same line
+    ))
+  ));
+  const orderToOrderImpact = groupList.map( thisGroup => 
+    // Input:  [thisGroup][orderInGroup][secondGroup]
+    // Output: [list of orders in second group that are impacted]
+    cellsByGroup[thisGroup].map( thisCell => 
+      Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
+        cellsByGroup[secGroup].map( (secCell,secIndex) =>
+          ( thisCell.row == secCell.row || thisCell.col == secCell.col ? secIndex : -1 )
+        ).filter( secIndex => secIndex != -1 )
+      ]))
+    )
+  );
+  // prune = combinationsByGroup.map( (theseCombos,thisGroup) => 
+  // // Test every combo for every group to see which other group combos it invalidates
+  //   Object.fromEntries(theseCombos.map( thisCombo => [thisCombo,
+  //     Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
+  //       new Set(combinationsByGroup[secGroup].filter( secCombo =>
+  //         orderToOrder[thisGroup].some( (theseImpacts,thisIndex) => // Some cell in the combo has some impacted cell with a duplicate
+  //           theseImpacts[secGroup].some( secIndex => thisCombo[thisIndex] == secCombo[secIndex] )
+  //         )
+  //       ).map( secCombo => String(secCombo) ))
+  //     ]))
+  //   ]))
+  // );
+
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
   logToConsole("Sorted Group List:",groupList);
   logToConsole("Combos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]) );
-  const indexesByGroup = cellsByGroup.map( thisGroup => thisGroup.map(c => c.index) );
-  const indexesImpactByGroup = cellsByGroup.map( thisGroup => thisGroup.map(c => c.impactedCells.map(c => c.index)) );
   // This is the final recursive search, which solves the puzzle
   // It tests all the combinations of each group, terminating branches which are invalid
-  // If multiple solutions are found, it terminates early, and generates a new puzzle
-  testCombinations(cells.map(c => 0), [...groupList]);
-  function testCombinations(cellTestValues, groupTestList) {
-    if (groupTestList.length == 0) {
+  logToConsole("Starting Final Search. Current time is",Date.now()-startTime,"ms.");
+  let totalNodeCount = 0;
+  let solutionsFound = [];
+  testCombinations(cells.map(c => 0), [...groupList], copyCombos(combinationsByGroup));
+  function testCombinations(cellTestValues, remainingGroups, remainingCombosByGroup) {
+    if (remainingGroups.length == 0) {
       solutionsFound.push([...cellTestValues]);
       if (solutionsFound.length > 1) failedGeneration = true; // If there is more than one solution, terminate early
       return; // Terminate this branch if all groups have been placed (which means a valid solution)
     }
     if (failedGeneration) return; // Terminate all branches if there are already 2 solutions
-    const thisGroup = groupTestList.pop();
+    const thisGroup = remainingGroups.pop();
     const indexesInThisGroup = indexesByGroup[thisGroup];
     const indexesByImpactInThisGroup = indexesImpactByGroup[thisGroup];
+
     combinationsByGroup[thisGroup].forEach( thisCombo => { // Loop through each combo in this group
+      // If the group has no valid combos left, this block is skipped, which terminates the branch
       totalNodeCount++; // Track how many nodes have been searched
-      // Place the values of that combo in the cell test values (this is not the actual cells)
-      thisCombo.forEach( (value,orderInGroup) => cellTestValues[indexesInThisGroup[orderInGroup]] = value );
-      // Call the function for the next group if there are no row or column issues
-      if (!thisCombo.some( (value,orderInGroup) => indexesByImpactInThisGroup[orderInGroup].some(i => cellTestValues[i] == value) )) 
-        testCombinations([...cellTestValues], [...groupTestList]);
+      // If there are no row or column issues with any of the values in this combo
+      if (!thisCombo.some( (value,orderInGroup) => indexesByImpactInThisGroup[orderInGroup].some(i => cellTestValues[i] == value) )) {
+        // Place the values of that combo in the cell test values (this is not the actual cells)
+        thisCombo.forEach( (value,orderInGroup) => cellTestValues[indexesInThisGroup[orderInGroup]] = value );
+        // Prune remaining combos in all other groups that are impacted by this group
+        const theseRemainingCombos = copyCombos(remainingCombosByGroup);
+        groupImpactByGroup[thisGroup].forEach( secGroup =>
+          theseRemainingCombos[secGroup] = theseRemainingCombos[secGroup].filter( secCombo =>
+            !orderToOrderImpact[thisGroup].some( (theseImpacts,thisIndex) => // No cell in the combo has an impacted cell with a duplicate
+              theseImpacts[secGroup].some( secIndex => thisCombo[thisIndex] == secCombo[secIndex] )
+            )
+          )
+        );
+        // logToConsole("Node Count:",totalNodeCount,"- Combo Total:",theseRemainingCombos.reduce((total, c) => total + c.length, 0)," - Combos:",remainingGroups.map(secGroup => theseRemainingCombos[secGroup]));
+        remainingGroups.sort((a,b) => theseRemainingCombos[b].length-theseRemainingCombos[a].length);
+        testCombinations([...cellTestValues], [...remainingGroups], theseRemainingCombos);
+      }
     });
     function seeBoardState() {
       logToConsole('Board State:');
@@ -488,22 +547,25 @@ function generateBoard(seedOrSize = null) {
       });
     }
   }
+  function copyCombos(combosToCopy) { // Creates a deep copy of combos structured like combinationsByGroup
+    return [...combosToCopy.map( theseCombos => [...theseCombos.map( thisCombo => [...thisCombo] )] )];
+  }
 
   logToConsole("Total Nodes Searched:",totalNodeCount);
   logToConsole("Solutions Found:",solutionsFound);
-  if (failedGeneration) {
+  if (failedGeneration) { // If multiple solutions have been found
     logToConsole("Multiple solutions found in seed",thisSeed)
     logToConsole("Generating another board...");
     logBlankLine();
     return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
   }
   // Log the final output of seed and time, even if logging is disabled
-  console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms");
+  console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms.");
   
   cells.forEach(thisCell => {
     thisCell.value = 0; // Hide the cell values
-    thisCell.candidates = [];
-    // thisCell.value = thisCell.answer; // Show answers
+    // thisCell.candidates = [];
+    thisCell.value = thisCell.answer; // Show answers
   });
   adjustLayout();
   updateCellDisplay();
@@ -519,7 +581,7 @@ function initializePRNG(forcedSeed) { // Mulberry 32 algorithm for RNG
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
 }
-function getDailySeed(seedOffset = 77) { // Get a reliable seed for the day (e.g., 20260720)
+function getDailySeed(seedOffset = 77) { // Get a reliable seed for the day
   const d = new Date();
   const year = d.getFullYear(); // Four digit year
   const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-11
