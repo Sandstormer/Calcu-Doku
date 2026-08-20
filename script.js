@@ -6,7 +6,7 @@ let isCandidateMode = false; // Whether "pencil mode" is activated
 let cells = []; // List of all cell elements
 let cellsByGroup = []; // Sublists of all cells, arranged by group
 let clickTarget = null; // Which cell is selected for number entry
-let boardSize = 4;
+let boardSize = 5;
 let cellDimensions = 100; // Pixel size of each cell
 const color = {
   green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', 
@@ -277,6 +277,35 @@ function generateBoard(seedOrSize = null) {
   });
   // Clear all cell values that aren't in a solo group
   cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
+  // Precalculate relations between groups to speed up later steps
+  const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
+    // Input:  [thisGroup]
+    // Output: [list of indexes of other groups that are impacted by this group]
+    thisGroup != secGroup && cellsByGroup[secGroup].some( secCell => cellsInThisGroup.some( thisCell => 
+      thisCell.row == secCell.row || thisCell.col == secCell.col // List of groups where any cells are in the same line
+    ))
+  ));
+  const indexesByGroup = cellsByGroup.map(
+    // Input:  [thisGroup]
+    // Output: [list of indexes of cells in that group] (like cellsByGroup, but index values instead of actual elements)
+    cellsInThisGroup => cellsInThisGroup.map(c => c.index)
+  );
+  const indexesImpactByGroup = cellsByGroup.map( cellsInThisGroup => cellsInThisGroup.map(thisCell =>
+    // Input:  [thisGroup][cellOrderInGroup]
+    // Output: [list of indexes of cells in other groups which are impacted by this cell]
+    thisCell.impactedCells.filter(c => c.group != thisCell.group).map(c => c.index))
+  );
+  const orderToOrderImpact = groupList.map( thisGroup => 
+    // Input:  [thisGroup][orderInGroup][secondGroup]
+    // Output: [list of orders in second group that are impacted]
+    cellsByGroup[thisGroup].map( thisCell => 
+      Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
+        cellsByGroup[secGroup].map( (secCell,secIndex) =>
+          ( thisCell.row == secCell.row || thisCell.col == secCell.col ? secIndex : -1 )
+        ).filter( secIndex => secIndex != -1 )
+      ]))
+    )
+  );
 
   logToConsole("Starting to generate initial group combos. Current time is",Date.now()-startTime,"ms.");
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
@@ -311,7 +340,7 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Starting Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
   // Loop the techniques to reduce the possibilities for each cell and each group
   // These are basic techniques that a human would use to solve a puzzle
-  while (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) {
+  while ( (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) && totalCombinations > combinationsByGroup.length ) {
     totalCombinationsPrev = totalCombinations;
     // Find candidates for individual cells, based off valid combos for each group 
     groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) => 
@@ -430,7 +459,7 @@ function generateBoard(seedOrSize = null) {
       logToConsole("Running Dead End technique after Pass",techniquesPassCount-1);
       groupList.filter( thisGroup => combinationsByGroup[thisGroup].length < 20).forEach( thisGroup => // For each group that isn't too big
         combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter( thisCombo => { // Remove combos which are a dead end
-          const isValidCombo = groupList.filter( secGroup => secGroup != thisGroup).every( secGroup => // Check all other groups
+          const isValidCombo = groupImpactByGroup[thisGroup].every( secGroup => // Check all other groups
             combinationsByGroup[secGroup].length > 20 || // Short-circuit if secondary group is too big
             combinationsByGroup[secGroup].some( secCombo => // Must have at least one valid combo left
               cellsByGroup[secGroup].every( (secCell,secIndex) => // Every cell in that combo must have no conflicts with the main combo
@@ -455,49 +484,13 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Cells By Group:",cellsByGroup);
   logToConsole("Combos By Group:",combinationsByGroup);
   logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
-  logToConsole("Combo Counts Sum:",combinationsByGroup.reduce((total, c) => total + c.length, 0));
-  logToConsole("Combo Counts Multiplied:",combinationsByGroup.reduce((total, c) => total * c.length, 1));
-
-  const indexesByGroup = cellsByGroup.map(
-    // Input:  [thisGroup]
-    // Output: [list of indexes of cells in that group] (like cellsByGroup, but index values instead of actual elements)
-    cellsInThisGroup => cellsInThisGroup.map(c => c.index)
-  );
-  const indexesImpactByGroup = cellsByGroup.map( cellsInThisGroup => cellsInThisGroup.map(thisCell =>
-    // Input:  [thisGroup][cellOrderInGroup]
-    // Output: [list of indexes of cells in other groups which are impacted by this cell]
-    thisCell.impactedCells.filter(c => c.group != thisCell.group).map(c => c.index))
-  );
-  const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
-    // Input:  [thisGroup]
-    // Output: [list of indexes of other groups that are impacted by this group]
-    thisGroup != secGroup && cellsByGroup[secGroup].some( secCell => cellsInThisGroup.some( thisCell => 
-      thisCell.row == secCell.row || thisCell.col == secCell.col // List of groups where any cells are in the same line
-    ))
-  ));
-  const orderToOrderImpact = groupList.map( thisGroup => 
-    // Input:  [thisGroup][orderInGroup][secondGroup]
-    // Output: [list of orders in second group that are impacted]
-    cellsByGroup[thisGroup].map( thisCell => 
-      Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
-        cellsByGroup[secGroup].map( (secCell,secIndex) =>
-          ( thisCell.row == secCell.row || thisCell.col == secCell.col ? secIndex : -1 )
-        ).filter( secIndex => secIndex != -1 )
-      ]))
-    )
-  );
-  // prune = combinationsByGroup.map( (theseCombos,thisGroup) => 
-  // // Test every combo for every group to see which other group combos it invalidates
-  //   Object.fromEntries(theseCombos.map( thisCombo => [thisCombo,
-  //     Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
-  //       new Set(combinationsByGroup[secGroup].filter( secCombo =>
-  //         orderToOrder[thisGroup].some( (theseImpacts,thisIndex) => // Some cell in the combo has some impacted cell with a duplicate
-  //           theseImpacts[secGroup].some( secIndex => thisCombo[thisIndex] == secCombo[secIndex] )
-  //         )
-  //       ).map( secCombo => String(secCombo) ))
-  //     ]))
-  //   ]))
-  // );
+  logToConsole("Combo Counts Sum:",totalCombinations);
+  // if (totalCombinations - combinationsByGroup.length > boardSize**3) { // If too much trial and error is required for a human to solve
+  //   logToConsole("Board with seed",thisSeed,"is too hard for humans, with",totalCombinations,"combinations.")
+  //   logToConsole("Generating another board...");
+  //   logBlankLine();
+  //   return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+  // }
 
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
   logToConsole("Sorted Group List:",groupList);
@@ -564,8 +557,8 @@ function generateBoard(seedOrSize = null) {
   
   cells.forEach(thisCell => {
     thisCell.value = 0; // Hide the cell values
-    // thisCell.candidates = [];
-    thisCell.value = thisCell.answer; // Show answers
+    thisCell.candidates = [];
+    // thisCell.value = thisCell.answer; // Show answers
   });
   adjustLayout();
   updateCellDisplay();
