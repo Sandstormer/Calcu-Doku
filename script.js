@@ -1,25 +1,30 @@
 const boardContainer = document.getElementById("board-container");
 const sidebarContainer = document.getElementById("sidebar-container");
-const opSymbols = ['','+','×','−','÷'];
+const opSymbols = ['','+','×','−','÷','?'];
+
 let isMobile = false; // Whether display is altered for mobile devices
 let isCandidateMode = false; // Whether "pencil mode" is activated
 let cells = []; // List of all cell elements
 let cellsByGroup = []; // Sublists of all cells, arranged by group
+let operatorsByGroup = [];
+let resultByGroup = [];
 let clickTarget = null; // Which cell is selected for number entry
-let boardSize = 5;
+let boardSize = 4;
+let showConsoleOutput = true;
+
 let cellDimensions = 100; // Pixel size of each cell
+const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
+const sizeOfBlindBoard = 6;
 const color = {
   green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', 
   yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)', cell:'rgb(238,238,238)',
 };
-const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
-
-let showConsoleOutput = true;
 
 let rollingSeed = getDailySeed(); // Daily seed
 // rollingSeed = Date.now(); // Variable seed
 
 generateBoard(boardSize);
+// generateBoard(698457645870);
 // generateBoard(328768089515666);
 // generateBoard(131907732802949);
 // generateBoard(4298879479096); // Multi solutions
@@ -60,17 +65,18 @@ function logBlankLine() {
 function generateBoard(seedOrSize = null) {
   if (seedOrSize != null) {
     const newBoardSize = seedOrSize % 10;
-    if (newBoardSize < 3 || newBoardSize > 9) {
-      logToConsole("Invalid board size: Must be between 3 and 9.");
+    if (newBoardSize == 1 || newBoardSize == 2) {
+      logToConsole("Invalid board size: Must be between 3 or greater.");
       return { time:0, seed:seedOrSize };
     }
     boardSize = newBoardSize;
   }
+  const isBlind = ( boardSize == 0 );
   if (seedOrSize == null || seedOrSize < 10) { // If didn't specify seed
     rollingSeed += boardSize - rollingSeed % 10; // Add board size to rolling seed
   }
   const thisSeed = ( seedOrSize > 9 ? seedOrSize : rollingSeed );
-  const fallbackSeed = ( thisSeed == rollingSeed ? null : ( thisSeed + 0x6D2B79F5 - 0x6D2B79F5 % 10 ) );
+  const fallbackSeed = ( thisSeed == rollingSeed ? boardSize : ( thisSeed + 0x6D2B79F5 - 0x6D2B79F5 % 10 ) );
   const getRandom = initializePRNG( seedOrSize > 9 ? seedOrSize : null );
   logToConsole("Start of puzzle generation with seed",thisSeed);
 
@@ -78,6 +84,7 @@ function generateBoard(seedOrSize = null) {
   boardContainer.innerHTML = '';
   let failedGeneration = false;
   const startTime = Date.now();
+  if (isBlind) boardSize = sizeOfBlindBoard;
 
   const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
   const allIndexes = [...Array(boardSize).keys()];
@@ -249,12 +256,13 @@ function generateBoard(seedOrSize = null) {
   cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
   cells.forEach(thisCell => {
     if (thisCell.operator == -1) {
-      const groupSize = cells.filter(c => c.group === thisCell.group).length;
+      const thisGroup = thisCell.group;
+      const groupSize = cells.filter(c => c.group === thisGroup).length;
       if (groupSize == 1) {
         thisCell.operator = 0;
         thisCell.candidates = [thisCell.value];
       } else if (groupSize == 2) {
-        const partner = cells.filter(c => c.group === thisCell.group && c != thisCell)[0];
+        const partner = cells.filter(c => c.group === thisGroup && c != thisCell)[0];
         const divided = (partner.value > thisCell.value ? partner.value / thisCell.value : thisCell.value / partner.value);
         if (divided%1 == 0 && getRandom() < 0.5) { // If the divided result is a whole number
           thisCell.operator = 4; // Set to divide
@@ -263,21 +271,25 @@ function generateBoard(seedOrSize = null) {
         }
       } 
       if (thisCell.operator == -1) { // For larger groups, or if smaller groups didn't assign yet
-        if (getRandom() < 0.45 && cellsByGroup[thisCell.group].reduce((total, c) => total * c.value, 1) < 300) {
+        if (getRandom() < 0.45 && cellsByGroup[thisGroup].reduce((total, c) => total * c.value, 1) < 300) {
           thisCell.operator = 2; // Set to multiply
         } else {
           thisCell.operator = 1; // Set to add
         }
       }
-      cells.filter(c => c.group == thisCell.group).forEach(c => { // For other cells in same group
+      cells.filter(c => c.group == thisGroup).forEach(c => { // For other cells in same group
         c.operator = thisCell.operator // Assign operator
-        c.result = calcResultForGroup(thisCell.group) // Determine the equation results
+        c.result = calcResultForGroup(thisGroup,thisCell.operator) // Determine the equation results
       });
     }
   });
   // Clear all cell values that aren't in a solo group
   cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
+  // For a blind puzzle, set all operators to unknown
+  if (isBlind) cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.operator = 5);
   // Precalculate relations between groups to speed up later steps
+  operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
+  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
   const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
     // Input:  [thisGroup]
     // Output: [list of indexes of other groups that are impacted by this group]
@@ -313,7 +325,7 @@ function generateBoard(seedOrSize = null) {
     const theseCombos = [];
     function build(cellValuesInCombo, thisGroup) {
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
-        if (calcResultForGroup(thisGroup) == cellsByGroup[thisGroup][0].result) { // If math result matches
+        if (isGroupResultCorrect(thisGroup)) { // If math result matches
           theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
         }
         return;
@@ -582,20 +594,26 @@ function getDailySeed(seedOffset = 77) { // Get a reliable seed for the day
   return parseInt(`${year}${month}${day}${seedOffset}`, 10);
 }
 
-function calcResultForGroup(thisGroup) {
+function calcResultForGroup(thisGroup, forcedOperator = null) {
   const cellsInThisGroup = cellsByGroup[thisGroup];
-  const thisOperator = cellsInThisGroup[0].operator;
+  const thisOperator = forcedOperator ?? operatorsByGroup[thisGroup];
   if (thisOperator == 0) return cellsInThisGroup[0].value; // If alone, there is no operator
   if (thisOperator == 1) return cellsInThisGroup.reduce((total, c) => total + c.value, 0); // Add
   if (thisOperator == 2) return cellsInThisGroup.reduce((total, c) => total * c.value, 1); // Multiply
   if (thisOperator == 3) return Math.abs(cellsInThisGroup[0].value - cellsInThisGroup[1].value); // Subtract
   if (thisOperator == 4) return Math.max(cellsInThisGroup[0].value, cellsInThisGroup[1].value) / Math.min(cellsInThisGroup[0].value, cellsInThisGroup[1].value); // Divide
 }
+function isGroupResultCorrect(thisGroup) {
+  if (operatorsByGroup[thisGroup] == 5) { // For a blind operator, try all 4 operators
+    return [1,2,3,4].some( thisOperator => calcResultForGroup(thisGroup,thisOperator) == resultByGroup[thisGroup] );
+  }
+  return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
+}
 
 function updateCellDisplay() { // Update the cell display
   cells.forEach(thisCell => {
     const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
-      ( calcResultForGroup(thisCell.group) == thisCell.result ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
+      ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
     const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
     const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
     const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
