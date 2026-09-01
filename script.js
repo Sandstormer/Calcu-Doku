@@ -1,5 +1,5 @@
 const boardContainer = document.getElementById("board-container");
-const sidebarContainer = document.getElementById("sidebar-container");
+const inputContainer = document.getElementById("input-container");
 const opSymbols = ['','+','×','−','÷','?'];
 
 let isMobile = false; // Whether display is altered for mobile devices
@@ -130,6 +130,9 @@ function generateBoard(seedOrSize = null) {
     }
     logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.");
   }
+  // inputContainer.innerHTML = [...Array(boardSize+1).keys()].map( thisNum =>
+  //   `<div class="input-button"><div class="input-button-value">${thisNum||"×"}</div></div>`
+  // ).join("");
   logToConsole("Cells after number placement:",cells);
   const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
@@ -631,14 +634,23 @@ function updateCellHighlight(newClickTarget = null) { // Update the cell backgro
 }
 
 function adjustLayout() {
-  isMobile = (window.innerWidth <= 768);
+  isMobile = (document.documentElement.clientWidth <= 768);
   // Set dimensions of everything to be integers, to prevent subpixel rounding
-  const newCellDimensions = Math.max(~~(((Math.min(window.innerHeight,window.innerWidth)-60)*0.85)/boardSize)-4,50);
+  const totalBorderWidth = 2*(boardSize+1);
+  const minAxis = Math.min(document.documentElement.clientHeight,document.documentElement.clientWidth);
+  const viewFillRatio = ( minAxis <= 768 ? 1 : 0.85 );
+  const newCellDimensions = Math.max( ~~( (minAxis-totalBorderWidth)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
+  logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions) {
+    logToConsole("changed")
     cellDimensions = newCellDimensions;
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+    document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
+    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minAxis) {
+      document.documentElement.style.setProperty("--border-size", `${~~((minAxis - boardContainer.offsetWidth) / 2)}px`);
+    }
     updateCellDisplay();
   }
 }

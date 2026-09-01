@@ -15,16 +15,17 @@ div {
   line-height: 1.125;
 }
 #main-container {
-  padding: 30px;
+  padding: var(--border-size);
+  overflow-x: hidden;
   margin: auto;
-  background-color: #252129;
-  border-radius: 8px;
 }
 #board-container {
   height: var(--board-size);
   width: var(--board-size);
   background-color: #E0E0E0;
   border: 6px solid black;
+  outline: var(--border-size) solid #252129;
+  border-radius: 1px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -66,6 +67,34 @@ div {
   top: 97%;
   right: 5%;
   transform: translateY(-100%);
+}
+
+#input-container {
+  display: flex;
+  flex-direction: row;
+  background-color: #18121B;
+  background-color: green;
+  margin: auto;
+  border-radius: 8px;
+  padding: 40px 10px 10px;
+  width: max-content;
+  max-width: calc(0.8*var(--board-size));
+  gap: 10px;
+}
+.input-button {
+  display: flex;
+  border: 6px solid black;
+  border-radius: 1000px;
+  background-color: rgb(238,238,238);
+  min-height: 100px;
+  aspect-ratio: 1/1;
+  cursor: pointer;
+}
+.input-button-value {
+  font-size: 80px;
+  line-height: 100%;
+  margin: auto;
+  cursor: pointer;
 }
 
 /* Cell faint borders */
