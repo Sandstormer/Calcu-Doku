@@ -20,14 +20,16 @@ div {
   margin: auto;
 }
 #board-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 300;
   height: var(--board-size);
   width: var(--board-size);
   background-color: #E0E0E0;
   border: 6px solid black;
   outline: var(--border-size) solid #252129;
   border-radius: 1px;
-  display: flex;
-  flex-direction: column;
   gap: 6px;
 }
 .row {
@@ -72,25 +74,26 @@ div {
 #input-container {
   display: flex;
   flex-direction: row;
+  position: relative;
+  z-index: 200;
   background-color: #18121B;
-  margin: auto;
-  border-radius: 8px;
-  padding: 40px 10px 10px;
+  margin: var(--border-size) auto auto;
+  border-radius: 0px 0px 8px 8px;
+  padding: 0px 5px;
   width: max-content;
-  max-width: calc(0.8*var(--board-size));
-  gap: 10px;
 }
 .input-button {
   display: flex;
   border: 6px solid black;
   border-radius: 1000px;
   background-color: rgb(238,238,238);
-  min-height: 100px;
+  height: var(--input-size);
+  margin: 10px 5px;
   aspect-ratio: 1/1;
   cursor: pointer;
 }
 .input-button-value {
-  font-size: 80px;
+  font-size: calc(0.8*var(--input-size));
   line-height: 100%;
   margin: auto;
   cursor: pointer;
@@ -99,12 +102,12 @@ div {
 #pencil-container {
   display: flex;
   flex-direction: row;
-  background-color: green;
-  background-color: #18121B;
+  position: relative;
+  z-index: 100;
   background-color: #302B35;
   margin: auto;
-  border-radius: 8px;
-  padding: calc(10px + var(--border-size)) 10px 10px;
+  border-radius: 0px 0px 8px 8px;
+  padding: 10px;
   width: max-content;
   max-width: calc(0.8*var(--board-size));
   gap: 10px;

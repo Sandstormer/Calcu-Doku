@@ -131,9 +131,6 @@ function generateBoard(seedOrSize = null) {
     }
     logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.");
   }
-  // inputContainer.innerHTML = [...Array(boardSize+1).keys()].map( thisNum =>
-  //   `<div class="input-button"><div class="input-button-value">${thisNum||"×"}</div></div>`
-  // ).join("");
   logToConsole("Cells after number placement:",cells);
   const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
@@ -615,17 +612,27 @@ function isGroupResultCorrect(thisGroup) {
 }
 
 function updateCellDisplay() { // Update the cell display
+  const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
+  const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
   cells.forEach(thisCell => {
     const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
       ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
     const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
-    const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
-    const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
     const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
     thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value ? thisCell.value : ''}</div>
       <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
       <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
   });
+  inputContainer.innerHTML = "";
+  if (isMobile) {
+    [...Array(boardSize+1).keys()].forEach( thisNum => {
+      const newButton = document.createElement("div");
+      newButton.className = "input-button";
+      newButton.innerHTML = `<div class="input-button-value">${thisNum||"C"}</div>`;
+      newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
+      inputContainer.appendChild(newButton);
+    });
+  }
   updateCellHighlight(clickTarget);
 }
 function updateCellHighlight(newClickTarget = null) { // Update the cell background color
@@ -648,6 +655,7 @@ function adjustLayout() {
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+    document.documentElement.style.setProperty("--input-size", `${Math.max(40, Math.min(80, cellDimensions*0.7)*boardSize/(boardSize+1))}px`);
     document.documentElement.style.setProperty("--pencil-size", `${~~(cellDimensions/8)+8}px`);
     document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minAxis) {
@@ -662,18 +670,24 @@ function toggleCandidateMode() {
     `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
      <div class="pencil-text" style="color:${isPencilMode ? color.purple : "white" };">Candidate Mode</div>`;
 }
+function tryToEnterNumber(thisNum) {
+  if (clickTarget) {
+    if (isPencilMode) {
+      if (!clickTarget.candidates.includes(thisNum)) {
+        clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
+      }
+    } else {
+      clickTarget.value = thisNum;
+      clickTarget.candidates = [];
+    }
+    updateCellDisplay();
+  }
+}
 
 document.addEventListener('keydown', (event) => {
-  [1,2,3,4,5,6,7,8,9].forEach(number => {
-    if (event.key == number && number <= boardSize && clickTarget) {
-      if (isPencilMode) {
-        if (!clickTarget.candidates.includes(number)) {
-          clickTarget.candidates = [number,...clickTarget.candidates].sort();
-        }
-      } else {
-        clickTarget.value = number;
-        clickTarget.candidates = [];
-      }
+  [1,2,3,4,5,6,7,8,9].forEach(thisNum => {
+    if (event.key == thisNum && thisNum <= boardSize) {
+      tryToEnterNumber(thisNum);
     }
   });
   if (['0','`','Escape','Backspace','Delete'].includes(event.key)) {
