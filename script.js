@@ -1,9 +1,10 @@
 const boardContainer = document.getElementById("board-container");
 const inputContainer = document.getElementById("input-container");
+const pencilContainer = document.getElementById("pencil-container");
 const opSymbols = ['','+','×','−','÷','?'];
 
 let isMobile = false; // Whether display is altered for mobile devices
-let isCandidateMode = false; // Whether "pencil mode" is activated
+let isPencilMode = false; // Whether "pencil mode" is activated
 let cells = []; // List of all cell elements
 let cellsByGroup = []; // Sublists of all cells, arranged by group
 let operatorsByGroup = [];
@@ -618,9 +619,10 @@ function updateCellDisplay() { // Update the cell display
     const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
       ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
     const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
+    const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
     const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
     const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
-    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor};">${thisCell.value ? thisCell.value : ''}</div>
+    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value ? thisCell.value : ''}</div>
       <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
       <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
   });
@@ -629,7 +631,7 @@ function updateCellDisplay() { // Update the cell display
 function updateCellHighlight(newClickTarget = null) { // Update the cell background color
   clickTarget = newClickTarget;
   cells.forEach(thisCell => // Highlight the cell if it is selected
-    thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isCandidateMode ? color.purple : color.yellow ) : color.cell )
+    thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.purple : color.yellow ) : color.cell )
   );
 }
 
@@ -638,15 +640,15 @@ function adjustLayout() {
   // Set dimensions of everything to be integers, to prevent subpixel rounding
   const totalBorderWidth = 2*(boardSize+1);
   const minAxis = Math.min(document.documentElement.clientHeight,document.documentElement.clientWidth);
-  const viewFillRatio = ( minAxis <= 768 ? 1 : 0.85 );
+  const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minAxis*0.0005 ));
   const newCellDimensions = Math.max( ~~( (minAxis-totalBorderWidth)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
   logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions) {
-    logToConsole("changed")
     cellDimensions = newCellDimensions;
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+    document.documentElement.style.setProperty("--pencil-size", `${~~(cellDimensions/8)+8}px`);
     document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minAxis) {
       document.documentElement.style.setProperty("--border-size", `${~~((minAxis - boardContainer.offsetWidth) / 2)}px`);
@@ -655,13 +657,16 @@ function adjustLayout() {
   }
 }
 function toggleCandidateMode() {
-  isCandidateMode = !isCandidateMode;
+  isPencilMode = !isPencilMode;
+  pencilContainer.innerHTML = 
+    `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
+     <div class="pencil-text" style="color:${isPencilMode ? color.purple : "white" };">Candidate Mode</div>`;
 }
 
 document.addEventListener('keydown', (event) => {
   [1,2,3,4,5,6,7,8,9].forEach(number => {
     if (event.key == number && number <= boardSize && clickTarget) {
-      if (isCandidateMode) {
+      if (isPencilMode) {
         if (!clickTarget.candidates.includes(number)) {
           clickTarget.candidates = [number,...clickTarget.candidates].sort();
         }
@@ -672,7 +677,7 @@ document.addEventListener('keydown', (event) => {
     }
   });
   if (['0','`','Escape','Backspace','Delete'].includes(event.key)) {
-    if (isCandidateMode) {
+    if (isPencilMode) {
       clickTarget.candidates = []; // Clear the cell's candidates
     } else {
       clickTarget.value = 0; // Clear the cell's value
@@ -696,3 +701,4 @@ document.addEventListener('keydown', (event) => {
   updateCellDisplay();
 });
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
+pencilContainer.addEventListener("click", toggleCandidateMode);
