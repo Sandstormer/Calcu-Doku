@@ -123,8 +123,8 @@ function generateBoard(seedOrSize = null) {
         newCell.candidates = [...allNumsToGive];
         newCell.isLeader = false;
         newCell.addEventListener('click',     () => updateCellHighlight(newCell));
-        newCell.addEventListener('mouseover', () => updateCellHighlight(newCell));
-        newCell.addEventListener('mouseout',  () => updateCellHighlight());
+        newCell.addEventListener('mouseover', () => updateCellHighlight(newCell, true));
+        newCell.addEventListener('mouseout',  () => updateCellHighlight(null, true));
         newRow.appendChild(newCell);
         cells.push(newCell);
       }
@@ -635,20 +635,22 @@ function updateCellDisplay() { // Update the cell display
   }
   updateCellHighlight(clickTarget);
 }
-function updateCellHighlight(newClickTarget = null) { // Update the cell background color
-  clickTarget = newClickTarget;
-  cells.forEach(thisCell => // Highlight the cell if it is selected
-    thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.purple : color.yellow ) : color.cell )
-  );
+function updateCellHighlight(newClickTarget = null, isHover = false) { // Update the cell background color
+  if (!isHover || !isMobile) {
+    clickTarget = newClickTarget;
+    cells.forEach(thisCell => // Highlight the cell if it is selected
+      thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.purple : color.yellow ) : color.cell )
+    );
+  }
 }
 
 function adjustLayout() {
   isMobile = (document.documentElement.clientWidth <= 768);
   // Set dimensions of everything to be integers, to prevent subpixel rounding
   const totalBorderWidth = 2*(boardSize+1);
-  const minAxis = Math.min(document.documentElement.clientHeight,document.documentElement.clientWidth);
-  const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minAxis*0.0005 ));
-  const newCellDimensions = Math.max( ~~( (minAxis-totalBorderWidth)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
+  const minScreenAxis = Math.min(document.documentElement.clientHeight,document.documentElement.clientWidth);
+  const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minScreenAxis*0.0005 )); // Have up to 15% margin on large screens
+  const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderWidth)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
   logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions) {
     cellDimensions = newCellDimensions;
@@ -658,17 +660,20 @@ function adjustLayout() {
     document.documentElement.style.setProperty("--input-size", `${Math.max(40, Math.min(80, cellDimensions*0.7)*boardSize/(boardSize+1))}px`);
     document.documentElement.style.setProperty("--pencil-size", `${~~(cellDimensions/8)+8}px`);
     document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
-    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minAxis) {
-      document.documentElement.style.setProperty("--border-size", `${~~((minAxis - boardContainer.offsetWidth) / 2)}px`);
+    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) {
+      document.documentElement.style.setProperty("--border-size", `${~~((minScreenAxis - boardContainer.offsetWidth) / 2)}px`);
     }
     updateCellDisplay();
   }
 }
-function toggleCandidateMode() {
+function togglePencilMode() {
   isPencilMode = !isPencilMode;
+  updatePencilDisplay();
+}
+function updatePencilDisplay(isHover = false) {
   pencilContainer.innerHTML = 
     `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
-     <div class="pencil-text" style="color:${isPencilMode ? color.purple : "white" };">Candidate Mode</div>`;
+     <div class="pencil-text" style="color:${isPencilMode ? color.purple : ( isHover ? color.yellow : "white" )};">Candidate Mode</div>`;
 }
 function tryToEnterNumber(thisNum) {
   if (clickTarget) {
@@ -710,9 +715,11 @@ document.addEventListener('keydown', (event) => {
     }
   }
   if (event.key == "c") {
-    toggleCandidateMode();
+    togglePencilMode();
   };
   updateCellDisplay();
 });
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
-pencilContainer.addEventListener("click", toggleCandidateMode);
+pencilContainer.addEventListener("click",     () => togglePencilMode());
+pencilContainer.addEventListener("mouseover", () => updatePencilDisplay(true));
+pencilContainer.addEventListener("mouseout",  () => updatePencilDisplay());
