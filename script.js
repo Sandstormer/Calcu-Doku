@@ -9,6 +9,7 @@ let cells = []; // List of all cell elements
 let cellsByGroup = []; // Sublists of all cells, arranged by group
 let operatorsByGroup = [];
 let resultByGroup = [];
+let listOfUndoStates = [];
 let clickTarget = null; // Which cell is selected for number entry
 let boardSize = 4;
 let showConsoleOutput = true;
@@ -574,6 +575,8 @@ function generateBoard(seedOrSize = null) {
     // thisCell.value = thisCell.answer; // Show answers
   });
   adjustLayout();
+  listOfUndoStates = [];
+  saveUndoState();
   updateCellDisplay();
   return { time:Date.now()-startTime, seed:thisSeed }; // Return generation time and seed
 }
@@ -651,7 +654,7 @@ function adjustLayout() {
   const minScreenAxis = Math.min(document.documentElement.clientHeight,document.documentElement.clientWidth);
   const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minScreenAxis*0.0005 )); // Have up to 15% margin on large screens
   const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderWidth)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
-  logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
+  // logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions) {
     cellDimensions = newCellDimensions;
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
@@ -685,8 +688,16 @@ function tryToEnterNumber(thisNum) {
       clickTarget.value = thisNum;
       clickTarget.candidates = [];
     }
+    saveUndoState();
     updateCellDisplay();
   }
+}
+function saveUndoState() {
+  listOfUndoStates.push({
+    values: cells.map(c => c.value),
+    candidates: cells.map(c => c.candidates),
+    clickTarget: clickTarget,
+  });
 }
 
 document.addEventListener('keydown', (event) => {
@@ -695,7 +706,7 @@ document.addEventListener('keydown', (event) => {
       tryToEnterNumber(thisNum);
     }
   });
-  if (['0','`','Escape','Backspace','Delete'].includes(event.key)) {
+  if (['0','`','Escape','Delete'].includes(event.key)) {
     if (isPencilMode) {
       clickTarget.candidates = []; // Clear the cell's candidates
     } else {
@@ -716,6 +727,16 @@ document.addEventListener('keydown', (event) => {
   }
   if (event.key == "c") {
     togglePencilMode();
+  };
+  if (event.key == 'Backspace') { // Undo the last action
+    if (listOfUndoStates.length > 1) {
+      clickTarget = listOfUndoStates.pop().clickTarget;
+      const stateToRecover = listOfUndoStates[listOfUndoStates.length-1];
+      cells.forEach( (thisCell,thisIndex) => {
+        thisCell.value = stateToRecover.values[thisIndex];
+        thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
+      });
+    }
   };
   updateCellDisplay();
 });
