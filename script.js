@@ -10,6 +10,7 @@ let cellsByGroup = []; // Sublists of all cells, arranged by group
 let operatorsByGroup = [];
 let resultByGroup = [];
 let listOfUndoStates = [];
+let tempUndoState = [];
 let clickTarget = null; // Which cell is selected for number entry
 let boardSize = 4;
 let showConsoleOutput = true;
@@ -609,42 +610,13 @@ function calcResultForGroup(thisGroup, forcedOperator = null) {
 }
 function isGroupResultCorrect(thisGroup) {
   if (operatorsByGroup[thisGroup] == 5) { // For a blind operator, try all 4 operators
-    return [1,2,3,4].some( thisOperator => calcResultForGroup(thisGroup,thisOperator) == resultByGroup[thisGroup] );
+    if (cellsByGroup[thisGroup].length > 2) { // For blind groups larger than 2, only try 2 operators
+      return [1,2].some( thisOperator => calcResultForGroup(thisGroup,thisOperator) == resultByGroup[thisGroup] );
+    } else {
+      return [1,2,3,4].some( thisOperator => calcResultForGroup(thisGroup,thisOperator) == resultByGroup[thisGroup] );
+    }
   }
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
-}
-
-function updateCellDisplay() { // Update the cell display
-  const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
-  const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
-  cells.forEach(thisCell => {
-    const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
-      ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
-    const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
-    const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
-    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value ? thisCell.value : ''}</div>
-      <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
-      <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
-  });
-  inputContainer.innerHTML = "";
-  if (isMobile) {
-    [...Array(boardSize+1).keys()].forEach( thisNum => {
-      const newButton = document.createElement("div");
-      newButton.className = "input-button";
-      newButton.innerHTML = `<div class="input-button-value">${thisNum||"C"}</div>`;
-      newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
-      inputContainer.appendChild(newButton);
-    });
-  }
-  updateCellHighlight(clickTarget);
-}
-function updateCellHighlight(newClickTarget = null, isHover = false) { // Update the cell background color
-  if (!isHover || !isMobile) {
-    clickTarget = newClickTarget;
-    cells.forEach(thisCell => // Highlight the cell if it is selected
-      thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.purple : color.yellow ) : color.cell )
-    );
-  }
 }
 
 function adjustLayout() {
@@ -669,9 +641,45 @@ function adjustLayout() {
     updateCellDisplay();
   }
 }
+function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell display
+  const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
+  const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
+  cells.forEach(thisCell => {
+    const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
+      ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
+    const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
+    const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
+    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value ? thisCell.value : ''}</div>
+      <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
+      <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
+  });
+  inputContainer.innerHTML = "";
+  if (isMobile) {
+    [...Array(boardSize+1).keys()].forEach( thisNum => {
+      const newButton = document.createElement("div");
+      newButton.className = "input-button";
+      newButton.innerHTML = `<div class="input-button-value">${thisNum||"C"}</div>`;
+      newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
+      inputContainer.appendChild(newButton);
+    });
+  }
+  updateCellHighlight(newClickTarget);
+}
+function updateCellHighlight(newClickTarget = null, isHover = false) { // Update the cell background color
+  if (!isHover || !isMobile) {
+    if (newClickTarget != clickTarget) {
+      tempUndoState = [];
+      clickTarget = newClickTarget;
+    }
+    cells.forEach(thisCell => // Highlight the cell if it is selected
+      thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.purple : color.yellow ) : color.cell )
+    );
+  }
+  updatePencilDisplay();
+}
 function togglePencilMode() {
   isPencilMode = !isPencilMode;
-  updatePencilDisplay();
+  updateCellDisplay();
 }
 function updatePencilDisplay(isHover = false) {
   pencilContainer.innerHTML = 
@@ -680,13 +688,27 @@ function updatePencilDisplay(isHover = false) {
 }
 function tryToEnterNumber(thisNum) {
   if (clickTarget) {
-    if (isPencilMode) {
-      if (!clickTarget.candidates.includes(thisNum)) {
-        clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
+    if (isPencilMode) { // Add to the candidate list
+      if (thisNum) {
+        if (!clickTarget.candidates.includes(thisNum)) {
+          clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
+        }
+      } else {
+        clickTarget.candidates = [];
       }
-    } else {
+    } else { // Enter the main number
       clickTarget.value = thisNum;
       clickTarget.candidates = [];
+      logToConsole("temp",tempUndoState);
+      // Save a temporary undo state to recover candidates if multiple values are entered in succession
+      if (tempUndoState.length) {
+        cells.forEach( (thisCell,thisIndex) => thisCell.candidates = [...tempUndoState[thisIndex]] );
+      } else {
+        tempUndoState = cells.map(c => c.candidates);
+      }
+      logToConsole("temp-after",tempUndoState);
+      // Remove that number from the candidate list of impacted cells
+      clickTarget.impactedCells.forEach( c => c.candidates = c.candidates.filter( i => i != thisNum ));
     }
     saveUndoState();
     updateCellDisplay();
@@ -707,22 +729,18 @@ document.addEventListener('keydown', (event) => {
     }
   });
   if (['0','`','Escape','Delete'].includes(event.key)) {
-    if (isPencilMode) {
-      clickTarget.candidates = []; // Clear the cell's candidates
-    } else {
-      clickTarget.value = 0; // Clear the cell's value
-    }
+    tryToEnterNumber(0);
   }
   if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
     const thisIndex = clickTarget.index;
     if (event.key == "ArrowUp" && thisIndex >= boardSize) {
-      clickTarget = cells[thisIndex-boardSize];
+      updateCellHighlight(cells[thisIndex-boardSize]);
     } else if (event.key == "ArrowDown" && thisIndex < boardSize*(boardSize-1)) {
-      clickTarget = cells[thisIndex+boardSize];
+      updateCellHighlight(cells[thisIndex+boardSize]);
     } else if (event.key == "ArrowLeft" && thisIndex%boardSize) {
-      clickTarget = cells[thisIndex-1];
+      updateCellHighlight(cells[thisIndex-1]);
     } else if (event.key == "ArrowRight" && thisIndex%boardSize < boardSize-1) {
-      clickTarget = cells[thisIndex+1];
+      updateCellHighlight(cells[thisIndex+1]);
     }
   }
   if (event.key == "c") {
@@ -730,15 +748,14 @@ document.addEventListener('keydown', (event) => {
   };
   if (event.key == 'Backspace') { // Undo the last action
     if (listOfUndoStates.length > 1) {
-      clickTarget = listOfUndoStates.pop().clickTarget;
-      const stateToRecover = listOfUndoStates[listOfUndoStates.length-1];
+      const stateToRecover = listOfUndoStates[listOfUndoStates.length-2];
       cells.forEach( (thisCell,thisIndex) => {
         thisCell.value = stateToRecover.values[thisIndex];
         thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
       });
+      updateCellDisplay(listOfUndoStates.pop().clickTarget);
     }
   };
-  updateCellDisplay();
 });
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
 pencilContainer.addEventListener("click",     () => togglePencilMode());

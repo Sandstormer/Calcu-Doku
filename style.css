@@ -55,12 +55,14 @@ div {
   font-size: 80px;
   line-height: 100%;
   margin: auto;
+  pointer-events: none;
 }
 .mod-text {
   font-size: 34px;
   position: absolute;
   top: 5%;
   left: 5%;
+  pointer-events: none;
 }
 .candidates {
   font-size: 30px;
@@ -69,6 +71,7 @@ div {
   top: 97%;
   right: 5%;
   transform: translateY(-100%);
+  pointer-events: none;
 }
 
 #input-container {
