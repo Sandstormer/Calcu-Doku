@@ -27,6 +27,7 @@ let rollingSeed = getDailySeed(); // Daily seed
 // rollingSeed = Date.now(); // Variable seed
 
 generateBoard(boardSize);
+// generateBoard(776864328808868);
 // generateBoard(698457645870);
 // generateBoard(328768089515666);
 // generateBoard(131907732802949);
@@ -39,7 +40,6 @@ function findHardestBoard(amount, thisSize = boardSize) {
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     const thisBoard = generateBoard(thisSize);
-    logBlankLine();
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
   generateBoard(hardestBoard.seed);
@@ -52,7 +52,6 @@ function benchmark(amount, thisSize = boardSize) {
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     generateBoard(thisSize);
-    logBlankLine();
   }
   showConsoleOutput = true;
   console.log("Finished benchmark with total time of",Date.now()-startBenchTime,"ms.");
@@ -81,6 +80,7 @@ function generateBoard(seedOrSize = null) {
   const thisSeed = ( seedOrSize > 9 ? seedOrSize : rollingSeed );
   const fallbackSeed = ( thisSeed == rollingSeed ? boardSize : ( thisSeed + 0x6D2B79F5 - 0x6D2B79F5 % 10 ) );
   const getRandom = initializePRNG( seedOrSize > 9 ? seedOrSize : null );
+  logBlankLine();
   logToConsole("Start of puzzle generation with seed",thisSeed);
 
   cells = []; // Clear all cell info
@@ -108,7 +108,7 @@ function generateBoard(seedOrSize = null) {
         newCell.result = 0;
         
         // Assign the value of the cell (will be hidden after)
-        numsToGive = allNumsToGive.filter(thisNum => !cells.some(cell => (cell.row==i || cell.col==j) && cell.value==thisNum));
+        const numsToGive = allNumsToGive.filter(thisNum => !cells.some(cell => (cell.row==i || cell.col==j) && cell.value==thisNum));
         if (numsToGive.length == 0) { // If there are no valid numbers to place, delete the row and try again
           newRow.innerHTML = '';
           while (j > 0) { // Remove all cells in the row
@@ -136,7 +136,7 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Cells after number placement:",cells);
   const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
-  cells.forEach(thisCell => thisCell.impactedCells = cells.filter(c => c != thisCell && (c.row == thisCell.row) != (c.col == thisCell.col)));
+  cells.forEach(thisCell => thisCell.impactedCells = cells.filter(c => (c.row == thisCell.row) != (c.col == thisCell.col)));
 
   let thisGroup = 100;
   const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
@@ -326,25 +326,36 @@ function generateBoard(seedOrSize = null) {
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
     const theseCombos = [];
-    function build(cellValuesInCombo, thisGroup) {
+    const thisResult = resultByGroup[thisGroup];
+    const numsToGive = ( operatorsByGroup[thisGroup] == 2 ? allNumsToGive.filter(i => ~~(thisResult/i) == thisResult/i) : allNumsToGive );
+    if (operatorsByGroup[thisGroup] == 0) {
+      theseCombos.push([thisResult]);
+    } else {
+      build();
+    }
+    return theseCombos;
+    function build(cellValuesInCombo = []) {
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
         if (isGroupResultCorrect(thisGroup)) { // If math result matches
           theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
         }
         return;
       }
+      if (operatorsByGroup[thisGroup] == 1 
+        && ( cellsByGroup[thisGroup].reduce((total, c) => total + (c.value||1), 0) > thisResult
+        ||   cellsByGroup[thisGroup].reduce((total, c) => total + (c.value||boardSize), 0) < thisResult ) ) {
+        return;
+      }
       const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length];
-      thisCell.candidates.forEach(thisNum => { // Only try numbers in the candidate list
+      numsToGive.forEach(thisNum => { // Try all numbers
         if (!thisCell.impactedCells.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
           thisCell.value = thisNum; // Place the latest value into the actual cell
-          build([...cellValuesInCombo,thisNum], thisGroup); // Continue building a valid combo for this group
+          build([...cellValuesInCombo,thisNum]); // Continue building a valid combo for this group
         }
       });
       // Clear the cell value, so it doesn't remain once the function has walked back
-      thisCell.value = ( thisCell.candidates.length == 1 ? thisCell.candidates[0] : 0 );
+      thisCell.value = 0;
     }
-    build([], thisGroup);
-    return theseCombos;
   }
   logToConsole("Finished generating initial group combos. Current time is",Date.now()-startTime,"ms.");
   logToConsole("Combos By Group:",combinationsByGroup);
@@ -699,14 +710,12 @@ function tryToEnterNumber(thisNum) {
     } else { // Enter the main number
       clickTarget.value = thisNum;
       clickTarget.candidates = [];
-      logToConsole("temp",tempUndoState);
       // Save a temporary undo state to recover candidates if multiple values are entered in succession
       if (tempUndoState.length) {
         cells.forEach( (thisCell,thisIndex) => thisCell.candidates = [...tempUndoState[thisIndex]] );
       } else {
         tempUndoState = cells.map(c => c.candidates);
       }
-      logToConsole("temp-after",tempUndoState);
       // Remove that number from the candidate list of impacted cells
       clickTarget.impactedCells.forEach( c => c.candidates = c.candidates.filter( i => i != thisNum ));
     }
