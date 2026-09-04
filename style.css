@@ -128,6 +128,7 @@ div {
   align-items: center;
   justify-content: center;
   font-size: var(--pencil-size);
+  pointer-events: none;
 }
 .pencil-text {
   font-size: var(--pencil-size);
@@ -135,6 +136,7 @@ div {
   color: white;
   line-height: 100%;
   margin: 4px 2px -4px -1px;
+  pointer-events: none;
 }
 
 /* Cell faint borders */

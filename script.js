@@ -644,7 +644,7 @@ function adjustLayout() {
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
     document.documentElement.style.setProperty("--input-size", `${Math.max(40, Math.min(80, cellDimensions*0.7)*boardSize/(boardSize+1))}px`);
-    document.documentElement.style.setProperty("--pencil-size", `${~~(cellDimensions/8)+8}px`);
+    document.documentElement.style.setProperty("--pencil-size", `${Math.min(30,~~(cellDimensions/8)+8)}px`);
     document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) {
       document.documentElement.style.setProperty("--border-size", `${~~((minScreenAxis - boardContainer.offsetWidth) / 2)}px`);
@@ -688,14 +688,14 @@ function updateCellHighlight(newClickTarget = null, isHover = false) { // Update
   }
   updatePencilDisplay();
 }
-function togglePencilMode() {
-  isPencilMode = !isPencilMode;
-  updateCellDisplay();
-}
 function updatePencilDisplay(isHover = false) {
   pencilContainer.innerHTML = 
     `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
-     <div class="pencil-text" style="color:${isPencilMode ? color.purple : ( isHover ? color.yellow : "white" )};">Candidate Mode</div>`;
+    <div class="pencil-text" style="color:${isPencilMode ? color.purple : ( isHover ? color.yellow : "white" )};">Candidate Mode</div>`;
+}
+function togglePencilMode() {
+  isPencilMode = !isPencilMode;
+  updateCellDisplay();
 }
 function tryToEnterNumber(thisNum) {
   if (clickTarget) {
