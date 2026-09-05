@@ -11,6 +11,7 @@ let operatorsByGroup = [];
 let resultByGroup = [];
 let listOfUndoStates = [];
 let tempUndoState = [];
+let inputButtons = [];
 let clickTarget = null; // Which cell is selected for number entry
 let boardSize = 4;
 let showConsoleOutput = true;
@@ -19,8 +20,9 @@ let cellDimensions = 100; // Pixel size of each cell
 const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
 const sizeOfBlindBoard = 6;
 const color = {
-  green:'rgb(0, 158, 23)', red:'rgb(204, 33, 0)', purple:'rgb(140, 130, 240)', 
+  green:'rgb(0, 150, 0)', red:'rgb(220, 30, 0)', purple:'rgb(173, 165, 255)', 
   yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)', cell:'rgb(238,238,238)',
+  grey:'rgb(160,160,160)',
 };
 
 let rollingSeed = getDailySeed(); // Daily seed
@@ -649,6 +651,19 @@ function adjustLayout() {
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) {
       document.documentElement.style.setProperty("--border-size", `${~~((minScreenAxis - boardContainer.offsetWidth) / 2)}px`);
     }
+    inputContainer.innerHTML = "";
+    inputButtons = [];
+    if (isMobile) {
+      [...Array(boardSize+1).keys()].forEach( thisNum => {
+        const newButton = document.createElement("div");
+        newButton.className = "input-button";
+        newButton.innerHTML = thisNum || "C";
+        newButton.style.backgroundColor = color.cell;
+        newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
+        inputButtons.push(newButton);
+        inputContainer.appendChild(newButton);
+      });
+    }
     updateCellDisplay();
   }
 }
@@ -660,20 +675,11 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
       ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
     const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
     const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
+    const modText = ( thisCell.isLeader ? `${thisCell.result} ${opSymbols[thisCell.operator]}` : '' );
     thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value ? thisCell.value : ''}</div>
-      <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${thisCell.isLeader ? thisCell.result : ''} ${thisCell.isLeader ? opSymbols[thisCell.operator] : ''}</div>
+      <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${modText}</div>
       <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
   });
-  inputContainer.innerHTML = "";
-  if (isMobile) {
-    [...Array(boardSize+1).keys()].forEach( thisNum => {
-      const newButton = document.createElement("div");
-      newButton.className = "input-button";
-      newButton.innerHTML = `<div class="input-button-value">${thisNum||"C"}</div>`;
-      newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
-      inputContainer.appendChild(newButton);
-    });
-  }
   updateCellHighlight(newClickTarget);
 }
 function updateCellHighlight(newClickTarget = null, isHover = false) { // Update the cell background color
@@ -683,15 +689,26 @@ function updateCellHighlight(newClickTarget = null, isHover = false) { // Update
       clickTarget = newClickTarget;
     }
     cells.forEach(thisCell => // Highlight the cell if it is selected
-      thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.purple : color.yellow ) : color.cell )
+      thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.purple ) : color.cell )
     );
   }
+  inputButtons.forEach( (newButton,thisNum) => {
+    newButton.style.backgroundColor = ( thisNum == 0 ? color.grey : 
+      ( clickTarget == null ? color.cell : 
+        ( clickTarget.value ? ( clickTarget.value == thisNum ? color.purple : color.grey ) : 
+          ( clickTarget.candidates.includes(thisNum) ? color.yellow :
+            ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell )
+          )
+        )
+      )
+    );
+  });
   updatePencilDisplay();
 }
 function updatePencilDisplay(isHover = false) {
   pencilContainer.innerHTML = 
     `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
-    <div class="pencil-text" style="color:${isPencilMode ? color.purple : ( isHover ? color.yellow : "white" )};">Candidate Mode</div>`;
+    <div class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.purple : color.cell )};">Candidate Mode</div>`;
 }
 function togglePencilMode() {
   isPencilMode = !isPencilMode;
