@@ -5,8 +5,10 @@ const opSymbols = ['','+','×','−','÷','?'];
 
 let isMobile = false; // Whether display is altered for mobile devices
 let isPencilMode = false; // Whether "pencil mode" is activated
+let isPuzzleComplete = false;
 let cells = []; // List of all cell elements
 let cellsByGroup = []; // Sublists of all cells, arranged by group
+let groupList = [];
 let operatorsByGroup = [];
 let resultByGroup = [];
 let listOfUndoStates = [];
@@ -668,6 +670,34 @@ function adjustLayout() {
   }
 }
 function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell display
+  const updatedCompletion = groupList.every(thisGroup => isGroupResultCorrect(thisGroup)); // If puzzle is complete
+  if (updatedCompletion != isPuzzleComplete) {
+    isPuzzleComplete = updatedCompletion;
+    if (isPuzzleComplete) {
+      newClickTarget = null;
+      cells.forEach(thisCell => {
+        thisCell.classList.add("completion-animation");
+        thisCell.style.setProperty("--anim-delay", (thisCell.row + thisCell.col)/boardSize);
+      });
+      const completionBanner = document.createElement("div");
+      completionBanner.className = `completion-banner ${ isMobile ? "thin-shadow" : "thick-shadow" }`;
+      completionBanner.innerHTML = "";
+      ["Puzzle","Complete!"].forEach((thisPhrase,thisIndex) => {
+        if (thisIndex) completionBanner.appendChild(document.createElement("br"));
+        [...thisPhrase].forEach((thisChar,animDelay) => {
+          const charElement = document.createElement("span");
+          charElement.className = "completion-letter";
+          charElement.innerHTML = thisChar;
+          charElement.style.setProperty("--anim-delay", animDelay + thisIndex*6);
+          completionBanner.appendChild(charElement);
+        });
+      });
+      boardContainer.appendChild(completionBanner);
+    } else {
+      document.getElementsByClassName("completion-banner")[0]?.remove();
+      cells.forEach(thisCell => thisCell.classList.remove("completion-animation"));
+    }
+  }
   const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
   const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
   cells.forEach(thisCell => {
@@ -676,7 +706,7 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
     const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
     const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
     const modText = ( thisCell.isLeader ? `${thisCell.result} ${opSymbols[thisCell.operator]}` : '' );
-    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value ? thisCell.value : ''}</div>
+    thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value||''}</div>
       <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${modText}</div>
       <div class="candidates" style="font-size:${candFontSize}px;">${thisCell.candidates.join(' ')}</div>`;
   });
@@ -708,7 +738,7 @@ function updateCellHighlight(newClickTarget = null, isHover = false) { // Update
 function updatePencilDisplay(isHover = false) {
   pencilContainer.innerHTML = 
     `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
-    <div class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.purple : color.cell )};">Candidate Mode</div>`;
+    <div class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.purple : color.cell )};">Pencil Mode</div>`;
 }
 function togglePencilMode() {
   isPencilMode = !isPencilMode;

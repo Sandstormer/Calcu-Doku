@@ -22,6 +22,8 @@ div {
 #board-container {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   position: relative;
   z-index: 300;
   height: var(--board-size);
@@ -72,6 +74,70 @@ div {
   right: 5%;
   transform: translateY(-100%);
   pointer-events: none;
+}
+
+.completion-banner {
+  position: absolute;
+  color: rgb(140, 130, 240);
+  font-size: calc(0.1 * var(--board-size) + 16px);
+  letter-spacing: calc(0.01 * var(--board-size));
+  margin: -30px;
+  text-align: center;
+  pointer-events: none;
+}
+.thick-shadow {
+  text-shadow:
+     5px  0px 0 black,
+    -5px  0px 0 black,
+     4px  2px 0 black,
+    -4px  2px 0 black,
+     4px -2px 0 black,
+    -4px -2px 0 black,
+     3px  3px 0 black,
+    -3px  3px 0 black,
+     3px -3px 0 black,
+    -3px -3px 0 black,
+     2px  4px 0 black,
+    -2px  4px 0 black,
+     2px -4px 0 black,
+    -2px -4px 0 black,
+     0px  5px 0 black,
+     0px -5px 0 black;
+}
+.thin-shadow {
+  text-shadow:
+     3px  0px 0 black,
+    -3px  0px 0 black,
+     0px  3px 0 black,
+     0px -3px 0 black,
+     1px  2px 0 black,
+    -1px  2px 0 black,
+     1px -2px 0 black,
+    -1px -2px 0 black,
+     2px  1px 0 black,
+    -2px  1px 0 black,
+     2px -1px 0 black,
+    -2px -1px 0 black;
+}
+.completion-letter {
+  display: inline-block;
+  animation: jumpUp 1s ease-out both;
+  animation-delay: calc(var(--anim-delay) * 0.05s);
+  will-change: transform;
+}
+@keyframes jumpUp {
+  0%   { transform: translateY(0); opacity: 0%; }
+  20%  { transform: translateY(-30px); opacity: 100%; }
+  100% { transform: translateY(0); opacity: 100%; }
+}
+.completion-animation {
+  animation: colorChange 2s ease-in-out;
+  animation-delay: calc(var(--anim-delay) * 0.8s); /* Delay each cell */
+}
+@keyframes colorChange {
+  0% { background-color: #EEEEEE; }
+  50% { background-color: rgb(140, 130, 240); }
+  100% { background-color: #EEEEEE; }
 }
 
 #input-container {
@@ -147,27 +213,6 @@ div {
 }
 .no-left {
   border-left-color: rgba(0,0,0,0);
-}
-
-/* Header */
-h1 {
-  margin-top: 0px;
-  margin-bottom: 14px;
-  padding-left: 5px;
-  padding-right: 5px;
-  font-size: 34px;
-  text-align: center;
-  font-family: Verdana, sans-serif;
-}
-.colorful-text span {
-  display: inline-block;
-  animation: colorChange 2s ease-in-out;
-  animation-delay: calc(var(--i) * 0.05s); /* Delay each letter */
-}
-@keyframes colorChange {
-  0% { color: rgb(255, 255, 255); }
-  50% { color: rgb(140, 130, 240); }
-  100% { color: rgb(255, 255, 255); }
 }
 
 /* Hyperlinks */
