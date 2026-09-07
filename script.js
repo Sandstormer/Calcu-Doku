@@ -514,7 +514,7 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Cells By Group:",cellsByGroup);
   logToConsole("Combos By Group:",combinationsByGroup);
   logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
-  logToConsole("Combo Counts Sum:",totalCombinations);
+  logToConsole("Combo Counts Excess Sum:",totalCombinations - combinationsByGroup.length);
   // if (totalCombinations - combinationsByGroup.length > boardSize**3) { // If too much trial and error is required for a human to solve
   //   logToConsole("Board with seed",thisSeed,"is too hard for humans, with",totalCombinations,"combinations.")
   //   logToConsole("Generating another board...");
@@ -748,7 +748,9 @@ function tryToEnterNumber(thisNum) {
   if (clickTarget) {
     if (isPencilMode) { // Add to the candidate list
       if (thisNum) {
-        if (!clickTarget.candidates.includes(thisNum)) {
+        if (clickTarget.candidates.includes(thisNum)) {
+          clickTarget.candidates = clickTarget.candidates.filter(i => i != thisNum);
+        } else {
           clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
         }
       } else {
@@ -787,21 +789,23 @@ document.addEventListener('keydown', (event) => {
   if (['0','`','Escape','Delete'].includes(event.key)) {
     tryToEnterNumber(0);
   }
-  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
-    const thisIndex = clickTarget.index;
-    if (event.key == "ArrowUp" && thisIndex >= boardSize) {
-      updateCellHighlight(cells[thisIndex-boardSize]);
-    } else if (event.key == "ArrowDown" && thisIndex < boardSize*(boardSize-1)) {
-      updateCellHighlight(cells[thisIndex+boardSize]);
-    } else if (event.key == "ArrowLeft" && thisIndex%boardSize) {
-      updateCellHighlight(cells[thisIndex-1]);
-    } else if (event.key == "ArrowRight" && thisIndex%boardSize < boardSize-1) {
-      updateCellHighlight(cells[thisIndex+1]);
-    }
-  }
   if (event.key == "c") {
     togglePencilMode();
   };
+  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
+    if (clickTarget) {
+      const thisIndex = clickTarget.index;
+      if (event.key == "ArrowUp" && thisIndex >= boardSize) {
+        updateCellHighlight(cells[thisIndex-boardSize]);
+      } else if (event.key == "ArrowDown" && thisIndex < boardSize*(boardSize-1)) {
+        updateCellHighlight(cells[thisIndex+boardSize]);
+      } else if (event.key == "ArrowLeft" && thisIndex%boardSize) {
+        updateCellHighlight(cells[thisIndex-1]);
+      } else if (event.key == "ArrowRight" && thisIndex%boardSize < boardSize-1) {
+        updateCellHighlight(cells[thisIndex+1]);
+      }
+    }
+  }
   if (event.key == 'Backspace') { // Undo the last action
     if (listOfUndoStates.length > 1) {
       const stateToRecover = listOfUndoStates[listOfUndoStates.length-2];
