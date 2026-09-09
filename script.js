@@ -645,22 +645,23 @@ function isGroupResultCorrect(thisGroup) {
 //region Adjust Layout
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
 function adjustLayout() {
-  isMobile = (document.documentElement.clientWidth <= 768);
+  const newIsMobile = (document.documentElement.clientWidth <= 768);
   // Set dimensions of everything to be integers, to prevent subpixel rounding
-  const totalBorderWidth = 2*(boardSize+1);
-  const minScreenAxis = Math.min(document.documentElement.clientHeight,document.documentElement.clientWidth);
+  const totalBorderCount = 2*(boardSize+1);
+  const minScreenAxis = Math.min(document.documentElement.clientHeight-70,document.documentElement.clientWidth);
   const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minScreenAxis*0.0005 )); // Have up to 15% margin on large screens
-  const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderWidth)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
-  // logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
-  if (newCellDimensions != cellDimensions) {
+  const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderCount)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
+  logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
+  if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
+    isMobile = newIsMobile;
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
     document.documentElement.style.setProperty("--input-size", `${Math.max(40, Math.min(80, cellDimensions*0.7)*boardSize/(boardSize+1))}px`);
-    document.documentElement.style.setProperty("--pencil-size", `${Math.min(30,~~(cellDimensions/8)+8)}px`);
+    document.documentElement.style.setProperty("--pencil-size", `${Math.min(30,~~(cellDimensions*boardSize/50)+8)}px`);
     document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
-    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) {
+    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) { // Shrink border if overflowing on width
       document.documentElement.style.setProperty("--border-size", `${~~((minScreenAxis - boardContainer.offsetWidth) / 2)}px`);
     }
     inputContainer.innerHTML = "";
