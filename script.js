@@ -31,6 +31,7 @@ let rollingSeed = getDailySeed(); // Daily seed
 // rollingSeed = Date.now(); // Variable seed
 
 generateBoard(boardSize);
+// generateBoard(1274933009734556);
 // generateBoard(776864328808868);
 // generateBoard(698457645870);
 // generateBoard(328768089515666);
@@ -41,14 +42,16 @@ generateBoard(boardSize);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
+  showConsoleOutput = false;
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     const thisBoard = generateBoard(thisSize);
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
-  generateBoard(hardestBoard.seed);
+  showConsoleOutput = true;
+  hardestBoard = generateBoard(hardestBoard.seed);
   logBlankLine();
-  logToConsole("Finished seed search after",amount,"attempts. Total time of",Date.now()-startBenchTime,"ms.");
+  logToConsole("Finished seed search after",amount,"attempts.\nTotal time of",Date.now()-startBenchTime,"ms.");
   logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms.");
 }
 function benchmark(amount, thisSize = boardSize) {
@@ -68,6 +71,7 @@ function logBlankLine() {
   if (showConsoleOutput) console.log();
 }
 
+//region Generate Board
 function generateBoard(seedOrSize = null) {
   if (seedOrSize != null) {
     const newBoardSize = seedOrSize % 10;
@@ -248,16 +252,6 @@ function generateBoard(seedOrSize = null) {
       }
     }
   }
-
-  // Draw the group borders
-  cells.forEach((thisCell, i) => {
-    thisCell.classList = "cell";
-    if (thisCell.row != 0           && cells[i-boardSize].group == thisCell.group) thisCell.classList.add("no-top");
-    if (thisCell.row != boardSize-1 && cells[i+boardSize].group == thisCell.group) thisCell.classList.add("no-bot");
-    if (thisCell.col != 0           && cells[i-1].group == thisCell.group)         thisCell.classList.add("no-left");
-    if (thisCell.col != boardSize-1 && cells[i+1].group == thisCell.group)         thisCell.classList.add("no-right");
-    cells.filter(c => c.group === thisCell.group)[0].isLeader = true; // Only the first cell in each group shows the math symbol
-  });
   
   // Assign the operators to each group
   cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
@@ -294,6 +288,8 @@ function generateBoard(seedOrSize = null) {
   cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
   // For a blind puzzle, set all operators to unknown
   if (isBlind) cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.operator = 5);
+
+  updateCellBorders();
   // Precalculate relations between groups to speed up later steps
   operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
   resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
@@ -351,7 +347,7 @@ function generateBoard(seedOrSize = null) {
         return;
       }
       const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length];
-      numsToGive.forEach(thisNum => { // Try all numbers
+      numsToGive.forEach(thisNum => { // Try all possible numbers
         if (!thisCell.impactedCells.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
           thisCell.value = thisNum; // Place the latest value into the actual cell
           build([...cellValuesInCombo,thisNum]); // Continue building a valid combo for this group
@@ -361,39 +357,44 @@ function generateBoard(seedOrSize = null) {
       thisCell.value = 0;
     }
   }
-  logToConsole("Finished generating initial group combos. Current time is",Date.now()-startTime,"ms.");
-  logToConsole("Combos By Group:",combinationsByGroup);
+  logToConsole("Finished generating initial group combos.",
+    "\nCurrent time is",Date.now()-startTime,"ms.",
+    "\nCombos By Group:",combinationsByGroup);
 
+  //region Techniques
+  // Loop the solver techniques to reduce the possibilities for each cell and each group
+  // These are techniques that a human would use to solve a puzzle
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   let totalCombinationsPrev = null;
   let techniquesPassCount = 1;
-  logToConsole("Starting Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
-  // Loop the techniques to reduce the possibilities for each cell and each group
-  // These are basic techniques that a human would use to solve a puzzle
+  logToConsole("Starting Techniques.",totalCombinations,"total group combos.\nCurrent time is",Date.now()-startTime,"ms.");
+  function getCellCandsFromGroupCombos() { // Get individual cell candidates from the group combos
+    groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) =>
+      c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
+  }
   while ( (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) && totalCombinations > combinationsByGroup.length ) {
     totalCombinationsPrev = totalCombinations;
-    // Find candidates for individual cells, based off valid combos for each group 
-    groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) => 
-      c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
+    // Find candidates for individual cells, based off valid combos for each group
+    getCellCandsFromGroupCombos();
     logToConsole("Cell Candidates:",cells.map(c => [...c.candidates]));
     // "Lone Position" Technique: Rows or columns that only have one valid position for a particular number
     for (let row = 0; row < boardSize; row++) {
-      for (let number = 1; number < boardSize+1; number++) {
-        const cellsWithThatNumber = cellsByRow[row].filter(c => c.candidates.includes(number));
-        if (cellsWithThatNumber.length == 0) logToConsole(`Error: No valid spot for ${number} in row ${row}`);
+      for (let thisNum = 1; thisNum < boardSize+1; thisNum++) {
+        const cellsWithThatNumber = cellsByRow[row].filter(c => c.candidates.includes(thisNum));
+        if (cellsWithThatNumber.length == 0) logToConsole(`Error: No valid spot for ${thisNum} in row ${row}`);
         if (cellsWithThatNumber.length == 1 && cellsWithThatNumber[0].candidates.length > 1) {
-          cellsWithThatNumber[0].candidates = [number];
-          logToConsole(`Found lone position for ${number} in row ${row}`);
+          cellsWithThatNumber[0].candidates = [thisNum];
+          logToConsole(`Found lone position for ${thisNum} in row ${row}`);
         }
       }
     }
     for (let col = 0; col < boardSize; col++) {
-      for (let number = 1; number < boardSize+1; number++) {
-        const cellsWithThatNumber = cellsByColumn[col].filter(c => c.candidates.includes(number));
-        if (cellsWithThatNumber.length == 0) logToConsole(`Error: No valid spot for ${number} in column ${col}`);
+      for (let thisNum = 1; thisNum < boardSize+1; thisNum++) {
+        const cellsWithThatNumber = cellsByColumn[col].filter(c => c.candidates.includes(thisNum));
+        if (cellsWithThatNumber.length == 0) logToConsole(`Error: No valid spot for ${thisNum} in column ${col}`);
         if (cellsWithThatNumber.length == 1 && cellsWithThatNumber[0].candidates.length > 1) {
-          cellsWithThatNumber[0].candidates = [number];
-          logToConsole(`Found lone position for ${number} in column ${col}`);
+          cellsWithThatNumber[0].candidates = [thisNum];
+          logToConsole(`Found lone position for ${thisNum} in column ${col}`);
         }
       }
     }
@@ -478,11 +479,13 @@ function generateBoard(seedOrSize = null) {
         thisCombo.every( (thisNum,thisIndex) => cellsByGroup[thisGroup][thisIndex].candidates.includes(thisNum) )
       )
     );
-    // Report the end of this pass
-    logToConsole("Combos By Group:",combinationsByGroup);
-    logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
     totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-    logToConsole("Finished Pass",techniquesPassCount++,"of Techniques.",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
+    // Report the end of this pass
+    logToConsole("Combos By Group:",combinationsByGroup,
+      "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
+      "\nFinished Pass",techniquesPassCount++,"of Techniques.",
+      "\nThere are",totalCombinations,"total group combos.",
+       "\nCurrent time is",Date.now()-startTime,"ms.");
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
     if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
@@ -505,16 +508,21 @@ function generateBoard(seedOrSize = null) {
       logToConsole("Combos By Group:",combinationsByGroup);
       logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
       totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-      logToConsole("Finished Dead End Technique after Pass",techniquesPassCount-1,"There are",totalCombinations,"total group combos. Current time is",Date.now()-startTime,"ms.");
+      logToConsole("Combos By Group:",combinationsByGroup,
+        "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
+        "\nFinished Dead End Technique after Pass",techniquesPassCount-1,
+        "\nThere are",totalCombinations,"total group combos.",
+        "\nCurrent time is",Date.now()-startTime,"ms.");
     }
   }
   logToConsole("Finished All Techniques. Current time is",Date.now()-startTime,"ms.");
 
-  logToConsole("Group List:",groupList);
-  logToConsole("Cells By Group:",cellsByGroup);
-  logToConsole("Combos By Group:",combinationsByGroup);
-  logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
-  logToConsole("Combo Counts Excess Sum:",totalCombinations - combinationsByGroup.length);
+  logToConsole("Group List:",groupList,
+    "\nCells By Group:",cellsByGroup,
+    "\nCombos By Group:",combinationsByGroup,
+    "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
+    "\nCombo Counts Excess Sum:",totalCombinations - combinationsByGroup.length);
+  getCellCandsFromGroupCombos();
   // if (totalCombinations - combinationsByGroup.length > boardSize**3) { // If too much trial and error is required for a human to solve
   //   logToConsole("Board with seed",thisSeed,"is too hard for humans, with",totalCombinations,"combinations.")
   //   logToConsole("Generating another board...");
@@ -522,12 +530,13 @@ function generateBoard(seedOrSize = null) {
   //   return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
   // }
 
-  groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
-  logToConsole("Sorted Group List:",groupList);
-  logToConsole("Combos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]) );
+  //region Recursive Solver
   // This is the final recursive search, which solves the puzzle
   // It tests all the combinations of each group, terminating branches which are invalid
-  logToConsole("Starting Final Search. Current time is",Date.now()-startTime,"ms.");
+  groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
+  logToConsole("Sorted Group List:",groupList,
+    "\nCombos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]),
+    "\nStarting Final Search. Current time is",Date.now()-startTime,"ms.");
   let totalNodeCount = 0;
   let solutionsFound = [];
   testCombinations(cells.map(c => 0), [...groupList], copyCombos(combinationsByGroup));
@@ -574,11 +583,10 @@ function generateBoard(seedOrSize = null) {
     return [...combosToCopy.map( theseCombos => [...theseCombos.map( thisCombo => [...thisCombo] )] )];
   }
 
-  logToConsole("Total Nodes Searched:",totalNodeCount);
-  logToConsole("Solutions Found:",solutionsFound);
+  logToConsole("Total Nodes Searched:",totalNodeCount,
+    "\nSolutions Found:",solutionsFound);
   if (failedGeneration) { // If multiple solutions have been found
-    logToConsole("Multiple solutions found in seed",thisSeed)
-    logToConsole("Generating another board...");
+    logToConsole("Multiple solutions found in seed",thisSeed,"\nGenerating another board...");
     logBlankLine();
     return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
   }
@@ -634,6 +642,8 @@ function isGroupResultCorrect(thisGroup) {
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
 }
 
+//region Adjust Layout
+window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
 function adjustLayout() {
   isMobile = (document.documentElement.clientWidth <= 768);
   // Set dimensions of everything to be integers, to prevent subpixel rounding
@@ -669,8 +679,20 @@ function adjustLayout() {
     updateCellDisplay();
   }
 }
+//region Cell Drawing
+function updateCellBorders() { // Draw the faint borders between cells in the same group
+  cells.forEach((thisCell, i) => {
+    thisCell.classList = "cell";
+    if (thisCell.row != 0           && cells[i-boardSize].group == thisCell.group) thisCell.classList.add("no-top");
+    if (thisCell.row != boardSize-1 && cells[i+boardSize].group == thisCell.group) thisCell.classList.add("no-bot");
+    if (thisCell.col != 0           && cells[i-1].group == thisCell.group)         thisCell.classList.add("no-left");
+    if (thisCell.col != boardSize-1 && cells[i+1].group == thisCell.group)         thisCell.classList.add("no-right");
+    thisCell.isLeader = ( thisCell == cellsByGroup[thisCell.group][0] ); // Only the first cell in each group shows the math symbol
+  });
+}
 function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell display
-  const updatedCompletion = groupList.every(thisGroup => isGroupResultCorrect(thisGroup)); // If puzzle is complete
+  // Check if the puzzle is complete, and show the completion animation
+  const updatedCompletion = groupList.every(thisGroup => isGroupResultCorrect(thisGroup));
   if (updatedCompletion != isPuzzleComplete) {
     isPuzzleComplete = updatedCompletion;
     if (isPuzzleComplete) {
@@ -698,13 +720,14 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
       cells.forEach(thisCell => thisCell.classList.remove("completion-animation"));
     }
   }
-  const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text
-  const modFontSize = ~~Math.min(36, cellDimensions/4); // Scale size of the modifier text
+  // Draw the contents of each cell
+  const cellFontSize = ~~Math.min(80, cellDimensions*0.7); // Scale size of the modifier text, max 80px
+  const modFontSize  = ~~Math.min(36, cellDimensions/4);   // Scale size of the modifier text, max 36px
   cells.forEach(thisCell => {
-    const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black : // Show mod as black if group is incomplete
-      ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ));    // Or show as green/red if result is correct/wrong
+    const resultColor = ( cellsByGroup[thisCell.group].some(c => c.value == 0) ? color.black :  // Show mod as black if group is incomplete
+                          ( isGroupResultCorrect(thisCell.group) ? color.green : color.red ) ); // Or show as green/red if result is correct/wrong
     const valueColor = ( thisCell.impactedCells.some(c => c.value == thisCell.value) ? color.red : color.black ); // Show value as red is there is a duplicate
-    const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions/thisCell.candidates.length*1.1); // Scale size of the candidates
+    const candFontSize = ~~Math.min(30, modFontSize*0.9, cellDimensions*1.1/thisCell.candidates.length); // Shrink candidates to fit, max 30px
     const modText = ( thisCell.isLeader ? `${thisCell.result} ${opSymbols[thisCell.operator]}` : '' );
     thisCell.innerHTML = `<div class="cell-value" style="color:${valueColor}; font-size:${cellFontSize}px;">${thisCell.value||''}</div>
       <div class="mod-text" style="color:${resultColor}; font-size:${modFontSize}px;">${modText}</div>
@@ -722,12 +745,12 @@ function updateCellHighlight(newClickTarget = null, isHover = false) { // Update
       thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.purple ) : color.cell )
     );
   }
-  inputButtons.forEach( (newButton,thisNum) => {
-    newButton.style.backgroundColor = ( thisNum == 0 ? color.grey : 
-      ( clickTarget == null ? color.cell : 
-        ( clickTarget.value ? ( clickTarget.value == thisNum ? color.purple : color.grey ) : 
-          ( clickTarget.candidates.includes(thisNum) ? color.yellow :
-            ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell )
+  inputButtons.forEach( (newButton,thisNum) => { // Set the color of each number input button
+    newButton.style.backgroundColor = ( thisNum == 0 ? color.grey : // "Clear" button is always grey
+      ( clickTarget == null ? color.cell : // No color if not selected
+        ( clickTarget.value ? ( clickTarget.value == thisNum ? color.purple : color.grey ) : // Purple if value is selected
+          ( clickTarget.candidates.includes(thisNum) ? color.yellow : // Yellow if in candidate list
+            ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell ) // Grey if duplicate in line
           )
         )
       )
@@ -744,42 +767,8 @@ function togglePencilMode() {
   isPencilMode = !isPencilMode;
   updateCellDisplay();
 }
-function tryToEnterNumber(thisNum) {
-  if (clickTarget) {
-    if (isPencilMode) { // Add to the candidate list
-      if (thisNum) {
-        if (clickTarget.candidates.includes(thisNum)) {
-          clickTarget.candidates = clickTarget.candidates.filter(i => i != thisNum);
-        } else {
-          clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
-        }
-      } else {
-        clickTarget.candidates = [];
-      }
-    } else { // Enter the main number
-      clickTarget.value = thisNum;
-      clickTarget.candidates = [];
-      // Save a temporary undo state to recover candidates if multiple values are entered in succession
-      if (tempUndoState.length) {
-        cells.forEach( (thisCell,thisIndex) => thisCell.candidates = [...tempUndoState[thisIndex]] );
-      } else {
-        tempUndoState = cells.map(c => c.candidates);
-      }
-      // Remove that number from the candidate list of impacted cells
-      clickTarget.impactedCells.forEach( c => c.candidates = c.candidates.filter( i => i != thisNum ));
-    }
-    saveUndoState();
-    updateCellDisplay();
-  }
-}
-function saveUndoState() {
-  listOfUndoStates.push({
-    values: cells.map(c => c.value),
-    candidates: cells.map(c => c.candidates),
-    clickTarget: clickTarget,
-  });
-}
 
+//region Event Listeners
 document.addEventListener('keydown', (event) => {
   [1,2,3,4,5,6,7,8,9].forEach(thisNum => {
     if (event.key == thisNum && thisNum <= boardSize) {
@@ -817,7 +806,41 @@ document.addEventListener('keydown', (event) => {
     }
   };
 });
-window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
+function tryToEnterNumber(thisNum) {
+  if (clickTarget) {
+    if (isPencilMode) { // Add to the candidate list
+      if (thisNum) {
+        if (clickTarget.candidates.includes(thisNum)) {
+          clickTarget.candidates = clickTarget.candidates.filter(i => i != thisNum);
+        } else {
+          clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
+        }
+      } else {
+        clickTarget.candidates = [];
+      }
+    } else { // Enter the main number
+      clickTarget.value = thisNum;
+      clickTarget.candidates = [];
+      // Save a temporary undo state to recover candidates if multiple values are entered in succession
+      if (tempUndoState.length) {
+        cells.forEach( (thisCell,thisIndex) => thisCell.candidates = [...tempUndoState[thisIndex]] );
+      } else {
+        tempUndoState = cells.map(c => c.candidates);
+      }
+      // Remove that number from the candidate list of impacted cells
+      clickTarget.impactedCells.forEach( c => c.candidates = c.candidates.filter( i => i != thisNum ));
+    }
+    saveUndoState();
+    updateCellDisplay();
+  }
+}
+function saveUndoState() {
+  listOfUndoStates.push({
+    values: cells.map(c => c.value),
+    candidates: cells.map(c => c.candidates),
+    clickTarget: clickTarget,
+  });
+}
 pencilContainer.addEventListener("click",     () => togglePencilMode());
 pencilContainer.addEventListener("mouseover", () => updatePencilDisplay(true));
 pencilContainer.addEventListener("mouseout",  () => updatePencilDisplay());
