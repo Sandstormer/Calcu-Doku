@@ -1,5 +1,5 @@
-const boardContainer = document.getElementById("board-container");
-const inputContainer = document.getElementById("input-container");
+const boardContainer  = document.getElementById("board-container");
+const inputContainer  = document.getElementById("input-container");
 const pencilContainer = document.getElementById("pencil-container");
 const opSymbols = ['','+','×','−','÷','?'];
 
@@ -18,6 +18,7 @@ let listOfUndoStates = [];
 let tempUndoState = [];
 let inputButtons = [];
 let clickTarget = null; // Which cell is selected for number entry
+let rollingSeed = getDailySeed(); // Daily seed
 
 let boardSize = 4;
 let currentBoardOptions = ['1','1','1',boardSize];
@@ -38,22 +39,13 @@ const allOperatorsOptions = {
   // 9: [], // Reserved (currently not implemented)
 }
 const color = {
-  black:'rgb(0, 0, 0)', green:'rgb(0, 150, 0)', red:'rgb(220, 30, 0)',
-  cell:'rgb(238,238,238)', purple:'rgb(173, 165, 255)', yellow:'rgb(240, 230, 140)',
-  grey:'rgb(160,160,160)',
+  black:'rgb(  0,  0,  0)', green: 'rgb(  0, 150,   0)', red:   'rgb(220,  30,   0)',
+  cell: 'rgb(238,238,238)', purple:'rgb(173, 165, 255)', yellow:'rgb(240, 230, 140)',
+  grey: 'rgb(160,160,160)',
 };
 
-let rollingSeed = getDailySeed(); // Daily seed
-// rollingSeed = Date.now(); // Variable seed
-
 generateBoard(boardSize);
-// generateBoard(1274933009734556);
-// generateBoard(776864328808868);
-// generateBoard(698457645870);
-// generateBoard(328768089515666);
-// generateBoard(131907732802949);
-// generateBoard(4298879479096); // Multi solutions
-// generateBoard(25554200738496);
+// generateBoard(8236058721118);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
@@ -102,16 +94,16 @@ function generateBoard(seedOrSize = null) {
   // If the option code is just 1 digit, it will specify board size, and other digits will be 0
   // If seedOrSize is greater than 4 digits, the final 4 digits are the options code, and the earlier digits are the seed
   const newBoardOptions = ( seedOrSize == null ? currentBoardOptions : seedOrSize.toString().slice(-4).padStart(4,0).split('').map(Number) );
-  newBoardOptions[0] = 0; // [0] is board options (default 1) (currently not implemented)
-  newBoardOptions[1] = 0; // [1] is difficulty    (default 1) (currently not implemented)
-  // Option [2] is operators (default 1)
+  // Check for invalid options, and set them back to 0
   if (!(newBoardOptions[2] in allOperatorsOptions)) newBoardOptions[2] = 0;
-  // Option [3] is board size (must be between 3 and 9)
   if (newBoardOptions[3] < 3) failWithError("Invalid board size: Must be between 3 and 9.");
+  newBoardOptions[0] = 0; // [0] is group options (default 1) (currently not implemented)
+  // 1 = Normal, 2 = Just Duos, 3 = No Solos, 4 = Huge Groups, 5 = Symmetric Groups
+  newBoardOptions[1] = 0; // [1] is difficulty    (default 1) (currently not implemented)
   // For all non-zero options, set those as the current board options
   newBoardOptions.forEach((thisNum,i) => { if (thisNum) currentBoardOptions[i] = thisNum; });
-  const allOperatorsToGive = allOperatorsOptions[currentBoardOptions[2]];
-  boardSize = currentBoardOptions[3];
+  const allOperatorsToGive = allOperatorsOptions[currentBoardOptions[2]]; // Option [2] is operators (default 1)
+  boardSize = currentBoardOptions[3]; // Option [3] is board size (must be between 3 and 9)
 
   // If a full seed is specified, use that, otherwise add the suffix to the rolling seed
   const thisSeed = Number( ( seedOrSize > 9999 ? (~~(seedOrSize/10000))|0 : rollingSeed ) + currentBoardOptions.join('') );
@@ -326,39 +318,10 @@ function generateBoard(seedOrSize = null) {
   cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
   // For a blind puzzle, set all operators to unknown
   if (allOperatorsToGive.includes(5)) cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.operator = 5);
-
-  updateCellBorders();
   // Precalculate relations between groups to speed up later steps
   operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
   resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
-  const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
-    // Input:  [thisGroup]
-    // Output: [list of indexes of other groups that are impacted by this group]
-    thisGroup != secGroup && cellsByGroup[secGroup].some( secCell => cellsInThisGroup.some( thisCell => 
-      thisCell.row == secCell.row || thisCell.col == secCell.col // List of groups where any cells are in the same line
-    ))
-  ));
-  const indexesByGroup = cellsByGroup.map(
-    // Input:  [thisGroup]
-    // Output: [list of indexes of cells in that group] (like cellsByGroup, but index values instead of actual elements)
-    cellsInThisGroup => cellsInThisGroup.map(c => c.index)
-  );
-  const indexesImpactByGroup = cellsByGroup.map( cellsInThisGroup => cellsInThisGroup.map(thisCell =>
-    // Input:  [thisGroup][cellOrderInGroup]
-    // Output: [list of indexes of cells in other groups which are impacted by this cell]
-    thisCell.impactedCells.filter(c => c.group != thisCell.group).map(c => c.index))
-  );
-  const orderToOrderImpact = groupList.map( thisGroup => 
-    // Input:  [thisGroup][orderInGroup][secondGroup]
-    // Output: [list of orders in second group that are impacted]
-    cellsByGroup[thisGroup].map( thisCell => 
-      Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
-        cellsByGroup[secGroup].map( (secCell,secIndex) =>
-          ( thisCell.row == secCell.row || thisCell.col == secCell.col ? secIndex : -1 )
-        ).filter( secIndex => secIndex != -1 )
-      ]))
-    )
-  );
+  updateCellBorders();
 
   logToConsole("Starting to generate initial group combos. Current time is",Date.now()-startTime,"ms.");
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
@@ -398,6 +361,36 @@ function generateBoard(seedOrSize = null) {
   logToConsole("Finished generating initial group combos.",
     "\nCurrent time is",Date.now()-startTime,"ms.",
     "\nCombos By Group:",combinationsByGroup);
+
+  // Precalculate relations between groups to speed up later steps
+  const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
+    // Input:  [thisGroup]
+    // Output: [list of indexes of other groups that are impacted by this group]
+    thisGroup != secGroup && cellsByGroup[secGroup].some( secCell => 
+      cellsInThisGroup.some( thisCell => thisCell.row == secCell.row || thisCell.col == secCell.col )
+    )
+  ).sort((a,b) => combinationsByGroup[a].length-combinationsByGroup[b].length));
+  const indexesByGroup = cellsByGroup.map(
+    // Input:  [thisGroup]
+    // Output: [list of indexes of cells in that group] (like cellsByGroup, but index values instead of actual elements)
+    cellsInThisGroup => cellsInThisGroup.map(c => c.index)
+  );
+  const indexesImpactByGroup = cellsByGroup.map( cellsInThisGroup => cellsInThisGroup.map(thisCell =>
+    // Input:  [thisGroup][cellOrderInGroup]
+    // Output: [list of indexes of cells in other groups which are impacted by this cell]
+    thisCell.impactedCells.filter(c => c.group != thisCell.group).map(c => c.index))
+  );
+  orderToOrderImpact = groupList.map( thisGroup => 
+    // Input:  [thisGroup][orderInGroup][secondGroup]
+    // Output: [list of orders in second group that are impacted]
+    cellsByGroup[thisGroup].map( thisCell =>
+      Object.fromEntries(groupImpactByGroup[thisGroup].map( secGroup => [secGroup,
+        cellsByGroup[secGroup].map( (secCell,secIndex) =>
+          ( thisCell.row == secCell.row || thisCell.col == secCell.col ? secIndex : -1 )
+        ).filter( secIndex => secIndex != -1 )
+      ]))
+    )
+  );
 
   //region Techniques
   // Loop the solver techniques to reduce the possibilities for each cell and each group
@@ -528,14 +521,14 @@ function generateBoard(seedOrSize = null) {
     // This is quite slow, and sometimes not even worth it
     if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
       logToConsole("Running Dead End technique after Pass",techniquesPassCount);
-      groupList.filter( thisGroup => combinationsByGroup[thisGroup].length < 20).forEach( thisGroup => // For each group that isn't too big
+      // Rather than iterate through combinationsByGroup, it is better to just use groupList, so the combos can be updated during iteration
+      groupList.forEach( thisGroup => // Check all groups, regardless of size
         combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter( thisCombo => { // Remove combos which are a dead end
-          const isValidCombo = groupImpactByGroup[thisGroup].every( secGroup => // Check all other groups
-            combinationsByGroup[secGroup].length > 20 || // Short-circuit if secondary group is too big
-            combinationsByGroup[secGroup].some( secCombo => // Must have at least one valid combo left
-              cellsByGroup[secGroup].every( (secCell,secIndex) => // Every cell in that combo must have no conflicts with the main combo
-                !cellsByGroup[thisGroup].some( (thisCell,thisIndex) => 
-                  thisCombo[thisIndex] == secCombo[secIndex] && ( thisCell.row == secCell.row || thisCell.col == secCell.col ) )
+          const isValidCombo = groupImpactByGroup[thisGroup].every( secGroup => // Check all other impacted groups
+            combinationsByGroup[secGroup].some( secCombo => // Must have at least one valid combo left in secondary group
+              orderToOrderImpact[thisGroup].every( (theseImpacts,thisIndex) => // Every cell in the main group
+                // Every impacted index in the secondary group has no conflicts with the main combo
+                theseImpacts[secGroup].every( secIndex => thisCombo[thisIndex] != secCombo[secIndex])
               )
             )
           );
@@ -778,7 +771,7 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
   });
   updateCellHighlight(newClickTarget);
 }
-function updateCellHighlight(newClickTarget = null, isHover = false) { // Update the cell background color
+function updateCellHighlight(newClickTarget = clickTarget, isHover = false) { // Update the cell background color
   if (!isHover || !isMobile) {
     if (newClickTarget != clickTarget) {
       tempUndoState = [];
@@ -808,7 +801,7 @@ function updatePencilDisplay(isHover = false) {
 }
 function togglePencilMode() {
   isPencilMode = !isPencilMode;
-  updateCellDisplay();
+  updateCellHighlight();
 }
 
 //region Event Listeners
