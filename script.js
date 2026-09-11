@@ -734,7 +734,8 @@ function updateCellBorders() { // Draw the faint borders between cells in the sa
 }
 function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell display
   // Check if the puzzle is complete, and show the completion animation
-  const updatedCompletion = groupList.every(thisGroup => isGroupResultCorrect(thisGroup));
+  const updatedCompletion = groupList.every(thisGroup => isGroupResultCorrect(thisGroup))
+    && cells.every(thisCell => thisCell.value && !thisCell.impactedCells.some(c => c.value == thisCell.value));
   if (updatedCompletion != isPuzzleComplete) {
     isPuzzleComplete = updatedCompletion;
     if (isPuzzleComplete) {
