@@ -6,6 +6,9 @@ const opSymbols = ['','+','×','−','÷','?'];
 let isMobile = false; // Whether display is altered for mobile devices
 let isPencilMode = false; // Whether "pencil mode" is activated
 let isPuzzleComplete = false;
+let isConsoleOutput = true;
+const isDebugMode = false;
+
 let cells = []; // List of all cell elements
 let cellsByGroup = []; // Sublists of all cells, arranged by group
 let groupList = [];
@@ -15,15 +18,28 @@ let listOfUndoStates = [];
 let tempUndoState = [];
 let inputButtons = [];
 let clickTarget = null; // Which cell is selected for number entry
+
 let boardSize = 4;
-let showConsoleOutput = true;
+let currentBoardOptions = ['1','1','1',boardSize];
 
 let cellDimensions = 100; // Pixel size of each cell
 const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
-const sizeOfBlindBoard = 6;
+const allOperatorsOptions = {
+  // key = third digit in board options code ( i.e. ##1# )
+  // value = indexes of available operators ( 0 = '', 1 = +, 2 = ×, 3 = −, 4 = ÷, 5 = ? )
+  1: [0,1,2,3,4], // Default
+  2: [1,2,3,4], // No Solos
+  3: [0,1,3], // Plus Minus
+  4: [0,1,2], // Plus Mult
+  5: [0,2,4], // Mult Divide
+  6: [0,1], // Plus
+  7: [0,2], // Mult
+  8: [0,1,2,3,4,5], // Blind
+  // 9: [], // Reserved (currently not implemented)
+}
 const color = {
-  green:'rgb(0, 150, 0)', red:'rgb(220, 30, 0)', purple:'rgb(173, 165, 255)', 
-  yellow:'rgb(240, 230, 140)', black:'rgb(0, 0, 0)', cell:'rgb(238,238,238)',
+  black:'rgb(0, 0, 0)', green:'rgb(0, 150, 0)', red:'rgb(220, 30, 0)',
+  cell:'rgb(238,238,238)', purple:'rgb(173, 165, 255)', yellow:'rgb(240, 230, 140)',
   grey:'rgb(160,160,160)',
 };
 
@@ -37,65 +53,77 @@ generateBoard(boardSize);
 // generateBoard(328768089515666);
 // generateBoard(131907732802949);
 // generateBoard(4298879479096); // Multi solutions
-// benchmark(20,8);
 // generateBoard(25554200738496);
 
 function findHardestBoard(amount, thisSize = boardSize) {
   let hardestBoard = { time:0, seed:null };
-  showConsoleOutput = false;
+  isConsoleOutput = false;
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
     const thisBoard = generateBoard(thisSize);
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
-  showConsoleOutput = true;
+  isConsoleOutput = true;
   hardestBoard = generateBoard(hardestBoard.seed);
   logBlankLine();
   logToConsole("Finished seed search after",amount,"attempts.\nTotal time of",Date.now()-startBenchTime,"ms.");
   logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms.");
 }
 function benchmark(amount, thisSize = boardSize) {
-  showConsoleOutput = false;
+  isConsoleOutput = false;
   const startBenchTime = Date.now();
+  const operatorCount = [0,0,0,0];
   for (let i = 0; i < amount; i++) {
     generateBoard(thisSize);
+    operatorCount.forEach((_,i) => operatorCount[i] += operatorsByGroup.filter(c => c == i+1).length);
   }
-  showConsoleOutput = true;
+  isConsoleOutput = true;
+  logToConsole("Occurrences of each operator:",operatorCount.flatMap((c,i) => [opSymbols[i+1],c]));
   console.log("Finished benchmark with total time of",Date.now()-startBenchTime,"ms.");
   console.log("Benchmark Average Time:",~~((Date.now()-startBenchTime)/amount),"ms.");
 }
 function logToConsole(...args) {
-  if (showConsoleOutput) console.log(...args);
+  if (isConsoleOutput) console.log(...args);
 }
 function logBlankLine() {
-  if (showConsoleOutput) console.log();
+  if (isConsoleOutput) console.log();
 }
 
 //region Generate Board
 function generateBoard(seedOrSize = null) {
-  if (seedOrSize != null) {
-    const newBoardSize = seedOrSize % 10;
-    if (newBoardSize == 1 || newBoardSize == 2) {
-      logToConsole("Invalid board size: Must be between 3 or greater.");
-      return { time:0, seed:seedOrSize };
-    }
-    boardSize = newBoardSize;
+  function failWithError(errorString) {
+    console.error(errorString);
+    return { time:0, seed:seedOrSize };
   }
-  const isBlind = ( boardSize == 0 );
-  if (seedOrSize == null || seedOrSize < 10) { // If didn't specify seed
-    rollingSeed += boardSize - rollingSeed % 10; // Add board size to rolling seed
-  }
-  const thisSeed = ( seedOrSize > 9 ? seedOrSize : rollingSeed );
-  const fallbackSeed = ( thisSeed == rollingSeed ? boardSize : ( thisSeed + 0x6D2B79F5 - 0x6D2B79F5 % 10 ) );
-  const getRandom = initializePRNG( seedOrSize > 9 ? seedOrSize : null );
+  // If seed is too large, the final digits don't parse correctly
+  if (seedOrSize > 10**14) failWithError("Seed too large. Must be less than 15 digits.");
+  // seedOrSize is either a full seed (5 to 14 digits), or an options code (1 to 4 digits)
+  // If an option digit is 0, or invalid, or unspecified, it will use the previously valid choice for that option
+  // If the option code is just 1 digit, it will specify board size, and other digits will be 0
+  // If seedOrSize is greater than 4 digits, the final 4 digits are the options code, and the earlier digits are the seed
+  const newBoardOptions = ( seedOrSize == null ? currentBoardOptions : seedOrSize.toString().slice(-4).padStart(4,0).split('').map(Number) );
+  newBoardOptions[0] = 0; // [0] is board options (default 1) (currently not implemented)
+  newBoardOptions[1] = 0; // [1] is difficulty    (default 1) (currently not implemented)
+  // Option [2] is operators (default 1)
+  if (!(newBoardOptions[2] in allOperatorsOptions)) newBoardOptions[2] = 0;
+  // Option [3] is board size (must be between 3 and 9)
+  if (newBoardOptions[3] < 3) failWithError("Invalid board size: Must be between 3 and 9.");
+  // For all non-zero options, set those as the current board options
+  newBoardOptions.forEach((thisNum,i) => { if (thisNum) currentBoardOptions[i] = thisNum; });
+  const allOperatorsToGive = allOperatorsOptions[currentBoardOptions[2]];
+  boardSize = currentBoardOptions[3];
+
+  // If a full seed is specified, use that, otherwise add the suffix to the rolling seed
+  const thisSeed = Number( ( seedOrSize > 9999 ? (~~(seedOrSize/10000))|0 : rollingSeed ) + currentBoardOptions.join('') );
+  const fallbackSeed = ( seedOrSize > 9999 ? (~~(seedOrSize/10000) + 0x6D2B79F5)|0 : '' ) + currentBoardOptions.join('');
+  const getRandom = initializePRNG( seedOrSize > 9999 ? ~~(thisSeed/10000) : null );
   logBlankLine();
   logToConsole("Start of puzzle generation with seed",thisSeed);
-
+  
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
   let failedGeneration = false;
   const startTime = Date.now();
-  if (isBlind) boardSize = sizeOfBlindBoard;
 
   const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
   const allIndexes = [...Array(boardSize).keys()];
@@ -128,7 +156,7 @@ function generateBoard(seedOrSize = null) {
           continue; // Restart the row from column 0
         }
         newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
-        newCell.answer = newCell.value;
+        if (isDebugMode) newCell.answer = newCell.value;
         newCell.group = null;
         newCell.candidates = [...allNumsToGive];
         newCell.isLeader = false;
@@ -150,7 +178,8 @@ function generateBoard(seedOrSize = null) {
   const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
   initializeGroups(0.4,0.2);
   initializeGroups(1,0.3);
-  finalizeGroups(0.6 + boardSize/30);
+  const soloMergeChance = ( allOperatorsToGive.includes(0) ? 0.6 + boardSize/30 : 1 );
+  finalizeGroups(soloMergeChance);
   sequentializeGroups();
   function initializeGroups(assignChance = 1, mergeChance = 0) { // Cluster the cells into groups **************
     cells.forEach((thisCell, thisIndex) => {
@@ -187,7 +216,7 @@ function generateBoard(seedOrSize = null) {
       }
     }); 
   }
-  function finalizeGroups(soloMergeChance = 0.8) { // Final pass to clean up groups **************
+  function finalizeGroups(soloMergeChance = 1) { // Final pass to clean up groups **************
     cells.forEach((thisCell, thisIndex) => {
       const partners = [ // Stay within the limits of the board
         thisIndex >= boardSize              ? thisIndex-boardSize : -1, // up
@@ -199,18 +228,19 @@ function generateBoard(seedOrSize = null) {
         thisCell.group = thisGroup;
         thisGroup += 1;
       }
-      if (cells.filter(cell => cell.group === thisCell.group).length == 1) { // If the current cell is in a solo group
-        const soloPartners = partners.filter(i => i != -1 && ( cells[i].group == null || cells.filter(cell => cell.group === cells[i].group).length == 1 ) );
+      if (cells.filter(c => c.group === thisCell.group).length == 1) { // If the current cell is in a solo group
+        const soloPartners = partners.filter(i => i != -1 && ( cells[i].group == null || cells.filter(c => c.group === cells[i].group).length == 1 ) );
         if (soloPartners.length) { // If there is an adjacent cell in a solo group, always merge with it
           const partnerIndex = soloPartners[Math.floor(getRandom() * soloPartners.length)];
           cells[partnerIndex].group = thisCell.group;
         } else if (getRandom() < soloMergeChance) { // Chance to merge current solo cell into group of an adjacent cell
-          const mergeableIndexes = partners.filter(i => i != -1 && cells[i].group); // Partner must have a group
+          // Partner must have an assigned group, which is not already at max size
+          const mergeableIndexes = partners.filter(i => i != -1 && cells[i].group && cells.filter(c => c.group === cells[i].group).length < maxGroupSize);
           if (mergeableIndexes.length) { // If there is a valid partner
             const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
             const targetGroup = cells[partnerIndex].group;
-            const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-            if (groupSize < maxGroupSize && getRandom() < soloMergeChance**(groupSize-2)) { // Less likely to form huge groups
+            const groupSize = cells.filter(c => c.group === targetGroup).length;
+            if (getRandom() < soloMergeChance**(groupSize-2)) { // Less likely to form huge groups
               thisCell.group = targetGroup;
             }
           }
@@ -219,11 +249,11 @@ function generateBoard(seedOrSize = null) {
     }); 
   }
   function sequentializeGroups() { // Re-order the group numbers to start at 0, and not skip any numbers
-    if (thisGroup > 100) thisGroup = 0;
+    cells.forEach(thisCell => thisCell.group += 100);
+    thisGroup = 0;
     cells.forEach(thisCell => {
       if (thisCell.group >= 100) {
-        const groupToReplace = thisCell.group;
-        cells.filter(c => c.group == groupToReplace).forEach(c => c.group = thisGroup);
+        cells.filter(c => c.group == thisCell.group).forEach(c => c.group = thisGroup);
         thisGroup++;
       }
     });
@@ -262,32 +292,40 @@ function generateBoard(seedOrSize = null) {
       if (groupSize == 1) {
         thisCell.operator = 0;
         thisCell.candidates = [thisCell.value];
-      } else if (groupSize == 2) {
-        const partner = cells.filter(c => c.group === thisGroup && c != thisCell)[0];
-        const divided = (partner.value > thisCell.value ? partner.value / thisCell.value : thisCell.value / partner.value);
-        if (divided%1 == 0 && getRandom() < 0.5) { // If the divided result is a whole number
-          thisCell.operator = 4; // Set to divide
-        } else if (getRandom() < 0.4) {
-          thisCell.operator = 3; // Set to subtract
-        }
-      } 
-      if (thisCell.operator == -1) { // For larger groups, or if smaller groups didn't assign yet
-        if (getRandom() < 0.45 && cellsByGroup[thisGroup].reduce((total, c) => total * c.value, 1) < 300) {
-          thisCell.operator = 2; // Set to multiply
-        } else {
-          thisCell.operator = 1; // Set to add
+      } else {
+        tryToAssignOperator();
+        function tryToAssignOperator(forceAssignment = 0) {
+          const assignChance = 0.1 + forceAssignment;
+          if (groupSize == 2) {
+            const partner = cells.filter(c => c.group === thisGroup && c != thisCell)[0];
+            const divided = (partner.value > thisCell.value ? partner.value / thisCell.value : thisCell.value / partner.value);
+            if (divided%1 == 0 && getRandom() < assignChance*(0.5+boardSize/4) && allOperatorsToGive.includes(4)) {
+              thisCell.operator = 4; // Set to divide (Chance is boosted because result has to be a whole number)
+            } else if (getRandom() < assignChance && allOperatorsToGive.includes(3)) {
+              thisCell.operator = 3; // Set to subtract
+            }
+          } 
+          if (thisCell.operator == -1) { // For larger groups, or if smaller groups didn't assign yet
+            if (getRandom() < assignChance && allOperatorsToGive.includes(2) // Mult result should be less than 300 (but can be higher if forced)
+              && ( cellsByGroup[thisGroup].reduce((total, c) => total * c.value, 1) < 300+1000*forceAssignment || !allOperatorsToGive.includes(1)) ) {
+              thisCell.operator = 2; // Set to multiply
+            } else if (getRandom() < assignChance+0.05 && allOperatorsToGive.includes(1)) {
+              thisCell.operator = 1; // Set to add (Chance is boosted a bit because it comes last)
+            }
+          }
+          if (thisCell.operator == -1) tryToAssignOperator(forceAssignment + 0.1); // Recursively run the function until an operator is assigned
         }
       }
       cells.filter(c => c.group == thisGroup).forEach(c => { // For other cells in same group
-        c.operator = thisCell.operator // Assign operator
-        c.result = calcResultForGroup(thisGroup,thisCell.operator) // Determine the equation results
+        c.operator = thisCell.operator; // Assign operator
+        c.result = calcResultForGroup(thisGroup,thisCell.operator); // Determine the equation results
       });
     }
   });
   // Clear all cell values that aren't in a solo group
   cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
   // For a blind puzzle, set all operators to unknown
-  if (isBlind) cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.operator = 5);
+  if (allOperatorsToGive.includes(5)) cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.operator = 5);
 
   updateCellBorders();
   // Precalculate relations between groups to speed up later steps
@@ -366,13 +404,13 @@ function generateBoard(seedOrSize = null) {
   // These are techniques that a human would use to solve a puzzle
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   let totalCombinationsPrev = null;
-  let techniquesPassCount = 1;
+  let techniquesPassCount = 0;
   logToConsole("Starting Techniques.",totalCombinations,"total group combos.\nCurrent time is",Date.now()-startTime,"ms.");
   function getCellCandsFromGroupCombos() { // Get individual cell candidates from the group combos
     groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) =>
       c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
   }
-  while ( (totalCombinations < totalCombinationsPrev || techniquesPassCount == 1) && totalCombinations > combinationsByGroup.length ) {
+  while ( (totalCombinations < totalCombinationsPrev || techniquesPassCount == 0) && totalCombinations > combinationsByGroup.length ) {
     totalCombinationsPrev = totalCombinations;
     // Find candidates for individual cells, based off valid combos for each group
     getCellCandsFromGroupCombos();
@@ -481,15 +519,15 @@ function generateBoard(seedOrSize = null) {
     );
     totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
     // Report the end of this pass
-    logToConsole("Combos By Group:",combinationsByGroup,
-      "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
-      "\nFinished Pass",techniquesPassCount++,"of Techniques.",
+    logToConsole("Finished Pass",techniquesPassCount=techniquesPassCount+1,"of Techniques.",
       "\nThere are",totalCombinations,"total group combos.",
-       "\nCurrent time is",Date.now()-startTime,"ms.");
+      "\nCurrent time is",Date.now()-startTime,"ms.",
+      "\nCombos By Group:",combinationsByGroup,
+      "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)]);
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
     // This is quite slow, and sometimes not even worth it
     if (totalCombinations == totalCombinationsPrev) { // Only runs as a last resort, if all other techniques found nothing this pass
-      logToConsole("Running Dead End technique after Pass",techniquesPassCount-1);
+      logToConsole("Running Dead End technique after Pass",techniquesPassCount);
       groupList.filter( thisGroup => combinationsByGroup[thisGroup].length < 20).forEach( thisGroup => // For each group that isn't too big
         combinationsByGroup[thisGroup] = combinationsByGroup[thisGroup].filter( thisCombo => { // Remove combos which are a dead end
           const isValidCombo = groupImpactByGroup[thisGroup].every( secGroup => // Check all other groups
@@ -505,23 +543,21 @@ function generateBoard(seedOrSize = null) {
           return isValidCombo;
         })
       );
-      logToConsole("Combos By Group:",combinationsByGroup);
-      logToConsole("Combo Counts:",[...combinationsByGroup.map(c => c.length)]);
       totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
-      logToConsole("Combos By Group:",combinationsByGroup,
-        "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
-        "\nFinished Dead End Technique after Pass",techniquesPassCount-1,
+      logToConsole("Finished Dead End Technique after Pass",techniquesPassCount,
         "\nThere are",totalCombinations,"total group combos.",
-        "\nCurrent time is",Date.now()-startTime,"ms.");
+        "\nCurrent time is",Date.now()-startTime,"ms.",
+        "\nCombos By Group:",combinationsByGroup,
+        "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)]);
     }
   }
-  logToConsole("Finished All Techniques. Current time is",Date.now()-startTime,"ms.");
-
-  logToConsole("Group List:",groupList,
-    "\nCells By Group:",cellsByGroup,
-    "\nCombos By Group:",combinationsByGroup,
-    "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
-    "\nCombo Counts Excess Sum:",totalCombinations - combinationsByGroup.length);
+  logToConsole("Finished All Techniques after",techniquesPassCount,"Passes.",
+        "\nThere are",totalCombinations,"total group combos.",
+        "\nCurrent time is",Date.now()-startTime,"ms.",
+        "\nCombos By Group:",combinationsByGroup,
+        "\nCells By Group:",cellsByGroup,
+        "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
+        "\nCombo Counts Excess Sum:",totalCombinations - combinationsByGroup.length);
   getCellCandsFromGroupCombos();
   // if (totalCombinations - combinationsByGroup.length > boardSize**3) { // If too much trial and error is required for a human to solve
   //   logToConsole("Board with seed",thisSeed,"is too hard for humans, with",totalCombinations,"combinations.")
@@ -534,9 +570,9 @@ function generateBoard(seedOrSize = null) {
   // This is the final recursive search, which solves the puzzle
   // It tests all the combinations of each group, terminating branches which are invalid
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
-  logToConsole("Sorted Group List:",groupList,
-    "\nCombos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]),
-    "\nStarting Final Search. Current time is",Date.now()-startTime,"ms.");
+  logToConsole("Starting Final Search. Current time is",Date.now()-startTime,"ms.",
+    "\nSorted Group List:",groupList,
+    "\nCombos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]));
   let totalNodeCount = 0;
   let solutionsFound = [];
   testCombinations(cells.map(c => 0), [...groupList], copyCombos(combinationsByGroup));
@@ -583,7 +619,8 @@ function generateBoard(seedOrSize = null) {
     return [...combosToCopy.map( theseCombos => [...theseCombos.map( thisCombo => [...thisCombo] )] )];
   }
 
-  logToConsole("Total Nodes Searched:",totalNodeCount,
+  logToConsole("Finished Final Search.",
+    "\nTotal Nodes Searched:",totalNodeCount,
     "\nSolutions Found:",solutionsFound);
   if (failedGeneration) { // If multiple solutions have been found
     logToConsole("Multiple solutions found in seed",thisSeed,"\nGenerating another board...");
@@ -592,11 +629,10 @@ function generateBoard(seedOrSize = null) {
   }
   // Log the final output of seed and time, even if logging is disabled
   console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms.");
-  
+
   cells.forEach(thisCell => {
     thisCell.value = 0; // Hide the cell values
-    thisCell.candidates = [];
-    // thisCell.value = thisCell.answer; // Show answers
+    if (!isDebugMode) thisCell.candidates = []; // Hide candidates
   });
   adjustLayout();
   listOfUndoStates = [];
@@ -605,23 +641,30 @@ function generateBoard(seedOrSize = null) {
   return { time:Date.now()-startTime, seed:thisSeed }; // Return generation time and seed
 }
 
-function initializePRNG(forcedSeed) { // Mulberry 32 algorithm for RNG
+// region Randomizer
+function initializePRNG(forcedSeed = null) { // Mulberry 32 algorithm for RNG
   return function() {
-    if (forcedSeed) var t = forcedSeed += 0x6D2B79F5;
-    else var t = rollingSeed += 0x6D2B79F5;
+    if (forcedSeed != null) {
+      var t = forcedSeed = (forcedSeed + 0x6D2B79F5) >>> 0;
+    } else {
+      var t = rollingSeed = (rollingSeed + 0x6D2B79F5) >>> 0;
+    }
     t = Math.imul(t ^ t >>> 15, t | 1);
     t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    // Denominator is max value of an unsigned 32-bit integer
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
 }
-function getDailySeed(seedOffset = 77) { // Get a reliable seed for the day
-  const d = new Date();
-  const year = d.getFullYear(); // Four digit year
+function getDailySeed(seedOffset = 7777) { // Get a reliable seed for the day
+  if (seedOffset > 9999) console.error("Seed Offset can't be greater than 9999.");
+  const d = new Date();                    // seedOffset (up to 9999) specifies board options
+  const year = String(d.getYear()).padStart(3,0); // Three digit year (since 1900)
   const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-11
   const day = String(d.getDate()).padStart(2, '0'); // Two digit day of the month
-  return parseInt(`${year}${month}${day}${seedOffset}`, 10);
+  return parseInt(`${year}${month}${day}${String(seedOffset).slice(-4).padStart(4,0)}`, 10);
 }
 
+//region Helper Functions
 function calcResultForGroup(thisGroup, forcedOperator = null) {
   const cellsInThisGroup = cellsByGroup[thisGroup];
   const thisOperator = forcedOperator ?? operatorsByGroup[thisGroup];
@@ -651,7 +694,7 @@ function adjustLayout() {
   const minScreenAxis = Math.min(document.documentElement.clientHeight-70,document.documentElement.clientWidth);
   const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minScreenAxis*0.0005 )); // Have up to 15% margin on large screens
   const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderCount)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
-  logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
+  // logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
@@ -660,23 +703,21 @@ function adjustLayout() {
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
     document.documentElement.style.setProperty("--input-size", `${Math.max(40, Math.min(80, cellDimensions*0.7)*boardSize/(boardSize+1))}px`);
     document.documentElement.style.setProperty("--pencil-size", `${Math.min(30,~~(cellDimensions*boardSize/50)+8)}px`);
-    document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions/8)+2}px`);
+    document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions*boardSize/50)+2}px`);
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) { // Shrink border if overflowing on width
       document.documentElement.style.setProperty("--border-size", `${~~((minScreenAxis - boardContainer.offsetWidth) / 2)}px`);
     }
     inputContainer.innerHTML = "";
     inputButtons = [];
-    if (isMobile) {
-      [...Array(boardSize+1).keys()].forEach( thisNum => {
-        const newButton = document.createElement("div");
-        newButton.className = "input-button";
-        newButton.innerHTML = thisNum || "C";
-        newButton.style.backgroundColor = color.cell;
-        newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
-        inputButtons.push(newButton);
-        inputContainer.appendChild(newButton);
-      });
-    }
+    [...Array(boardSize+1).keys()].forEach( thisNum => {
+      const newButton = document.createElement("div");
+      newButton.className = "input-button";
+      newButton.innerHTML = thisNum || "C";
+      newButton.style.backgroundColor = color.cell;
+      newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
+      inputButtons.push(newButton);
+      inputContainer.appendChild(newButton);
+    });
     updateCellDisplay();
   }
 }
