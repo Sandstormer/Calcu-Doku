@@ -4,6 +4,7 @@ const pencilContainer = document.getElementById("pencil-container");
 const opSymbols = ['','+','×','−','÷','?'];
 
 let isMobile = false; // Whether display is altered for mobile devices
+let isHoverAllowed = true;
 let isPencilMode = false; // Whether "pencil mode" is activated
 let isPuzzleComplete = false;
 let isConsoleOutput = true;
@@ -780,7 +781,10 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
   updateCellHighlight(newClickTarget);
 }
 function updateCellHighlight(newClickTarget = clickTarget, isHover = false) { // Update the cell background color
-  if (!isHover || !isMobile) {
+  if (isHover == false && newClickTarget == clickTarget) {
+    isHoverAllowed = !isHoverAllowed; // Prevent hovers if you click on a cell
+  }
+  if (!isHover || isHoverAllowed) {
     if (newClickTarget != clickTarget) {
       tempUndoState = [];
       clickTarget = newClickTarget;
