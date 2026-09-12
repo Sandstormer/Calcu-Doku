@@ -177,7 +177,7 @@ div {
   padding: calc(0.5*var(--border-size));
   width: max-content;
   max-width: calc(0.8*var(--board-size));
-  gap: 10px;
+  gap: calc(0.5*var(--border-size));
   cursor: pointer;
 }
 .pencil-button {

@@ -678,27 +678,35 @@ function isGroupResultCorrect(thisGroup) {
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
 }
 
-//region Adjust Layout
+//region Adjust Layout pen+bor+8 + in+20   64,20,24   64,27,21
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
 function adjustLayout() {
-  const newIsMobile = (document.documentElement.clientWidth <= 768);
+  const [height,width] = [document.documentElement.clientHeight,document.documentElement.clientWidth];
+  const newIsMobile = (width <= 768);
   // Set dimensions of everything to be integers, to prevent subpixel rounding
+  const minFullAxis = Math.min(height,width);
+  const inputButtonDimensions = ~~Math.max(40, Math.min(80, minFullAxis*0.1)*boardSize/(boardSize+1));
+  document.documentElement.style.setProperty("--input-size", `${inputButtonDimensions}px`);
+  const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+8);
+  document.documentElement.style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
+  const borderDimensions = ~~(minFullAxis*0.015)+2;
+  document.documentElement.style.setProperty("--border-size", `${borderDimensions}px`);
+  const viewFillRatioW = Math.max( 0.85, Math.min( 1, 1.35 -  width * 0.0005 )); // Up to 15% w margin on large screens
+  const viewFillRatioH = Math.max( 0.91, Math.min( 1, 1.21 - height * 0.0003 )); // Up to  9% h margin on large screens
+  const minScreenAxis = Math.min( width * viewFillRatioW,
+    (height-inputButtonDimensions-pencilButtonDimensions-3*borderDimensions-28)*viewFillRatioH);
   const totalBorderCount = 2*(boardSize+1);
-  const minScreenAxis = Math.min(document.documentElement.clientHeight-70,document.documentElement.clientWidth);
-  const viewFillRatio = Math.max( 0.85, Math.min( 1, 1.35-minScreenAxis*0.0005 )); // Have up to 15% margin on large screens
-  const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderCount)*viewFillRatio/(boardSize+0.25) ) - 4, 50);
-  // logToConsole(document.documentElement.clientWidth,cellDimensions,newCellDimensions);
+  const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderCount)/(boardSize+0.25) ) - 4, 50);
+  // logToConsole(width,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
-    document.documentElement.style.setProperty("--input-size", `${Math.max(40, Math.min(80, cellDimensions*0.7)*boardSize/(boardSize+1))}px`);
-    document.documentElement.style.setProperty("--pencil-size", `${Math.min(30,~~(cellDimensions*boardSize/50)+8)}px`);
-    document.documentElement.style.setProperty("--border-size", `${~~(cellDimensions*boardSize/50)+2}px`);
-    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > minScreenAxis) { // Shrink border if overflowing on width
-      document.documentElement.style.setProperty("--border-size", `${~~((minScreenAxis - boardContainer.offsetWidth) / 2)}px`);
+  logToConsole(cellDimensions,boardSize,cellDimensions*boardSize)
+    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > width) { // Shrink border if overflowing on width
+      document.documentElement.style.setProperty("--border-size", `${~~((width - boardContainer.offsetWidth) / 2)}px`);
     }
     inputContainer.innerHTML = "";
     inputButtons = [];
