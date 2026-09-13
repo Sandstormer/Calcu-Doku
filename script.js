@@ -160,12 +160,10 @@ function generateBoard(seedOrSize = null) {
         cells.push(newCell);
       }
     }
-    logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.");
+    logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.",
+      "\nCurrent time is",Date.now()-startTime,"ms.",
+      "Cells after number placement:",cells);
   }
-  logToConsole("Cells after number placement:",cells);
-  const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
-  const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
-  cells.forEach(thisCell => thisCell.impactedCells = cells.filter(c => (c.row == thisCell.row) != (c.col == thisCell.col)));
 
   let thisGroup = 100;
   const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
@@ -252,7 +250,8 @@ function generateBoard(seedOrSize = null) {
     });
     groupList = [...Array(thisGroup).keys()];
   }
-  logToConsole("Finished assigning groups. Current time is",Date.now()-startTime,"ms.");
+  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
+  logToConsole("Finished assigning groups. Current time is",Date.now()-startTime,"ms.","\nCells by Group:",cellsByGroup);
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
   // This is a quick identifier of multiple solutions                                [ 3 , 1 ]
@@ -265,9 +264,9 @@ function generateBoard(seedOrSize = null) {
             && ( ( cells[x+y*boardSize].group == cells[x+w+y*boardSize].group && cells[x+(y+h)*boardSize].group == cells[x+w+(y+h)*boardSize].group ) 
               || ( cells[x+y*boardSize].group == cells[x+(y+h)*boardSize].group && cells[x+w+y*boardSize].group == cells[x+w+(y+h)*boardSize].group ) )
           ) {
-            logToConsole(`Square Degen found at these indices: ${x+y*boardSize} ${x+w+(y+h)*boardSize} ${x+w+y*boardSize} ${x+(y+h)*boardSize}`);
-            logToConsole("Multiple solutions found in seed",thisSeed)
-            logToConsole("Generating another board...");
+            logToConsole("Square Degen found in seed",thisSeed,
+              "\nCell Indices:", x+y*boardSize, x+w+(y+h)*boardSize, x+w+y*boardSize, x+(y+h)*boardSize,
+              "\nGenerating another board...");
             logBlankLine();
             return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
           }
@@ -277,7 +276,6 @@ function generateBoard(seedOrSize = null) {
   }
   
   // Assign the operators to each group
-  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
   cells.forEach(thisCell => {
     if (thisCell.operator == -1) {
       const thisGroup = thisCell.group;
@@ -314,22 +312,33 @@ function generateBoard(seedOrSize = null) {
         c.result = calcResultForGroup(thisGroup,thisCell.operator); // Determine the equation results
       });
     }
-  });
-  // Clear all cell values that aren't in a solo group
+  });  
+  // Clear all cell values that aren't in a solo group (this must be done first)
   cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.value = 0);
-  // For a blind puzzle, set all operators to unknown
-  if (allOperatorsToGive.includes(5)) cells.filter(thisCell => thisCell.operator != 0).forEach(thisCell => thisCell.operator = 5);
-  // Precalculate relations between groups to speed up later steps
+  // Assemble cell candidates and list of impacted cells
+  cells.forEach(thisCell => {
+    thisCell.impactedCells = cells.filter(c => (c.row == thisCell.row) != (c.col == thisCell.col));
+    if (thisCell.operator != 0) {
+      thisCell.candidates = thisCell.candidates.filter(i => thisCell.impactedCells.every(c => c.value != i));
+      if (allOperatorsToGive.includes(5)) thisCell.operator = 5; // For a blind puzzle, set all operators to unknown
+      if (thisCell.operator == 2) // For multiply operators, candidates have to be divisible
+        thisCell.candidates = thisCell.candidates.filter(i => ~~(thisCell.result/i) == thisCell.result/i);
+    }
+  });
+  const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
+  const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
   operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
   resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
   updateCellBorders();
+  logToConsole("Finished assigning operators.",
+    "\nCurrent time is",Date.now()-startTime,"ms.",
+    "\nCell Candidates:",cells.map(c => [...c.candidates]));
 
-  logToConsole("Starting to generate initial group combos. Current time is",Date.now()-startTime,"ms.");
+  let totalComboNodes = 0;
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
     const theseCombos = [];
     const thisResult = resultByGroup[thisGroup];
-    const numsToGive = ( operatorsByGroup[thisGroup] == 2 ? allNumsToGive.filter(i => ~~(thisResult/i) == thisResult/i) : allNumsToGive );
     if (operatorsByGroup[thisGroup] == 0) {
       theseCombos.push([thisResult]);
     } else {
@@ -337,6 +346,7 @@ function generateBoard(seedOrSize = null) {
     }
     return theseCombos;
     function build(cellValuesInCombo = []) {
+      totalComboNodes++;
       if (cellValuesInCombo.length === cellsByGroup[thisGroup].length) {
         if (isGroupResultCorrect(thisGroup)) { // If math result matches
           theseCombos.push([...cellValuesInCombo]); // Record as a valid combo for this group
@@ -349,19 +359,21 @@ function generateBoard(seedOrSize = null) {
         return;
       }
       const thisCell = cellsByGroup[thisGroup][cellValuesInCombo.length];
-      numsToGive.forEach(thisNum => { // Try all possible numbers
-        if (!thisCell.impactedCells.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
+      const closeImpacts = thisCell.impactedCells.filter( c => c.value || c.group == thisCell.group );
+      thisCell.candidates.forEach(thisNum => { // Try all possible numbers
+        if (!closeImpacts.some(c => c.value == thisNum)) { // Check that there are no dupes in the same line
           thisCell.value = thisNum; // Place the latest value into the actual cell
           build([...cellValuesInCombo,thisNum]); // Continue building a valid combo for this group
         }
       });
-      // Clear the cell value, so it doesn't remain once the function has walked back
-      thisCell.value = 0;
+      thisCell.value = 0; // Clear the cell value, so it doesn't remain once the function has walked back
     }
   }
-  logToConsole("Finished generating initial group combos.",
+  let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
+  logToConsole("Finished generating initial group combos, via",totalComboNodes,"nodes.",
     "\nCurrent time is",Date.now()-startTime,"ms.",
-    "\nCombos By Group:",combinationsByGroup);
+    "\nCombos By Group:",combinationsByGroup,
+    "\nThere are",totalCombinations,"total group combos.");
 
   // Precalculate relations between groups to speed up later steps
   const groupImpactByGroup = cellsByGroup.map( ( cellsInThisGroup,thisGroup ) => groupList.filter( secGroup => 
@@ -396,10 +408,9 @@ function generateBoard(seedOrSize = null) {
   //region Techniques
   // Loop the solver techniques to reduce the possibilities for each cell and each group
   // These are techniques that a human would use to solve a puzzle
-  let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   let totalCombinationsPrev = null;
   let techniquesPassCount = 0;
-  logToConsole("Starting Techniques.",totalCombinations,"total group combos.\nCurrent time is",Date.now()-startTime,"ms.");
+  logToConsole("Starting Techniques.\nCurrent time is",Date.now()-startTime,"ms.");
   function getCellCandsFromGroupCombos() { // Get individual cell candidates from the group combos
     groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) =>
       c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
@@ -679,7 +690,7 @@ function isGroupResultCorrect(thisGroup) {
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
 }
 
-//region Adjust Layout pen+bor+8 + in+20   64,20,24   64,27,21
+//region Adjust Layout
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
 function adjustLayout() {
   const [height,width] = [document.documentElement.clientHeight,document.documentElement.clientWidth];
@@ -688,7 +699,7 @@ function adjustLayout() {
   const minFullAxis = Math.min(height,width);
   const inputButtonDimensions = ~~Math.max(40, Math.min(80, minFullAxis*0.1)*boardSize/(boardSize+1));
   document.documentElement.style.setProperty("--input-size", `${inputButtonDimensions}px`);
-  const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+8);
+  const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+10);
   document.documentElement.style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
   const borderDimensions = ~~(minFullAxis*0.015)+2;
   document.documentElement.style.setProperty("--border-size", `${borderDimensions}px`);
@@ -698,14 +709,12 @@ function adjustLayout() {
     (height-inputButtonDimensions-pencilButtonDimensions-3*borderDimensions-28)*viewFillRatioH);
   const totalBorderCount = 2*(boardSize+1);
   const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderCount)/(boardSize+0.25) ) - 4, 50);
-  // logToConsole(width,cellDimensions,newCellDimensions);
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
     document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
     document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
     document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
-  logToConsole(cellDimensions,boardSize,cellDimensions*boardSize)
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > width) { // Shrink border if overflowing on width
       document.documentElement.style.setProperty("--border-size", `${~~((width - boardContainer.offsetWidth) / 2)}px`);
     }
