@@ -442,15 +442,16 @@ function generateBoard(seedOrSize = null) {
       }
     }
     // "Single Elimination" Technique: If a group forces a number to be always be in a line, eliminate that number for the whole line
+    // This also applies to cells which only have one candidate
     groupList.forEach(thisGroup => {
       if (combinationsByGroup[thisGroup].length > 1) { // If there is only one combo, this whole technique is redundant
         const rowsToCheck = new Set(cellsByGroup[thisGroup].map(c => c.row));
         rowsToCheck.forEach(row => {
-          const numbersToCheck = [...new Set(combinationsByGroup[thisGroup].flatMap(thisCombo => thisCombo.filter((_,i) => cellsByGroup[thisGroup][i].row == row)))];
-          numbersToCheck.forEach(thisNum => {
+          const indexesToCheck = cellsByGroup[thisGroup].filter( (c,i) => c.row == row ? i : -1 ).filter( i => i != -1 );
+          allNumsToGive.forEach(thisNum => {
             // If every combo in that group has some cell with that number in that row
-            if (combinationsByGroup[thisGroup].every(thisCombo => thisCombo.some((value,i) => value == thisNum && cellsByGroup[thisGroup][i].row == row))) {
-              const cellsToDo = cellsByRow[row].filter(c => c.group != thisGroup && c.candidates.includes(thisNum));
+            if (combinationsByGroup[thisGroup].every( thisCombo => indexesToCheck.some( i => thisCombo[i] == thisNum ))) {
+              const cellsToDo = cellsByRow[row].filter( c => c.group != thisGroup && c.candidates.includes(thisNum) );
               if (cellsToDo.length) {
                 cellsToDo.forEach(c => c.candidates = c.candidates.filter(value => value != thisNum));
                 logToConsole("Single elimination found in group",thisGroup,"for number",thisNum,"in row",row);
@@ -460,11 +461,11 @@ function generateBoard(seedOrSize = null) {
         });
         const columnsToCheck = new Set(cellsByGroup[thisGroup].map(c => c.col));
         columnsToCheck.forEach(col => {
-          const numbersToCheck = [...new Set(combinationsByGroup[thisGroup].flatMap(thisCombo => thisCombo.filter((_,i) => cellsByGroup[thisGroup][i].col == col)))];
-          numbersToCheck.forEach(thisNum => {
+          const indexesToCheck = cellsByGroup[thisGroup].filter( (c,i) => c.col == col ? i : -1 ).filter( i => i != -1 );
+          allNumsToGive.forEach(thisNum => {
             // If every combo in that group has some cell with that number in that column
-            if (combinationsByGroup[thisGroup].every(thisCombo => thisCombo.some((value,i) => value == thisNum && cellsByGroup[thisGroup][i].col == col))) {
-              const cellsToDo = cellsByColumn[col].filter(c => c.group != thisGroup && c.candidates.includes(thisNum));
+            if (combinationsByGroup[thisGroup].every( thisCombo => indexesToCheck.some( i => thisCombo[i] == thisNum ))) {
+              const cellsToDo = cellsByColumn[col].filter( c => c.group != thisGroup && c.candidates.includes(thisNum) );
               if (cellsToDo.length) {
                 cellsToDo.forEach(c => c.candidates = c.candidates.filter(value => value != thisNum));
                 logToConsole("Single elimination found in group",thisGroup,"for number",thisNum,"in column",col);
@@ -539,7 +540,7 @@ function generateBoard(seedOrSize = null) {
           const isValidCombo = groupImpactByGroup[thisGroup].every( secGroup => // Check all other impacted groups
             combinationsByGroup[secGroup].some( secCombo => // Must have at least one valid combo left in secondary group
               orderToOrderImpact[thisGroup].every( (theseImpacts,thisIndex) => // Every cell in the main group
-                // Every impacted index in the secondary group has no conflicts with the main combo
+                // Every impacted index in the secondary group must have no conflicts with the main combo
                 theseImpacts[secGroup].every( secIndex => thisCombo[thisIndex] != secCombo[secIndex])
               )
             )
