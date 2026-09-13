@@ -45,29 +45,29 @@ const color = {
   grey: 'rgb(160,160,160)',
 };
 
-generateBoard(boardSize);
-// generateBoard(8236058721118);
+generateAndValidateBoard(boardSize);
+// generateAndValidateBoard(8236058721118);
 
-function findHardestBoard(amount, thisSize = boardSize) {
+function findHardestBoard(amount, boardOptions = currentBoardOptions) {
   let hardestBoard = { time:0, seed:null };
   isConsoleOutput = false;
   const startBenchTime = Date.now();
   for (let i = 0; i < amount; i++) {
-    const thisBoard = generateBoard(thisSize);
+    const thisBoard = generateAndValidateBoard(boardOptions);
     if (thisBoard.time > hardestBoard.time) hardestBoard = { time:thisBoard.time, seed:thisBoard.seed };
   }
   isConsoleOutput = true;
-  hardestBoard = generateBoard(hardestBoard.seed);
+  hardestBoard = generateAndValidateBoard(hardestBoard.seed);
   logBlankLine();
   logToConsole("Finished seed search after",amount,"attempts.\nTotal time of",Date.now()-startBenchTime,"ms.");
   logToConsole("Hardest board is seed",hardestBoard.seed,"with a solve time of",hardestBoard.time,"ms.");
 }
-function benchmark(amount, thisSize = boardSize) {
+function benchmark(amount, boardOptions = currentBoardOptions) {
   isConsoleOutput = false;
   const startBenchTime = Date.now();
   const operatorCount = [0,0,0,0];
   for (let i = 0; i < amount; i++) {
-    generateBoard(thisSize);
+    generateAndValidateBoard(boardOptions);
     operatorCount.forEach((_,i) => operatorCount[i] += operatorsByGroup.filter(c => c == i+1).length);
   }
   isConsoleOutput = true;
@@ -83,18 +83,19 @@ function logBlankLine() {
 }
 
 //region Generate Board
-function generateBoard(seedOrSize = null) {
+function generateAndValidateBoard(seedOrBoardOptions = null) {
+  
   function failWithError(errorString) {
     console.error(errorString);
-    return { time:0, seed:seedOrSize };
+    return { time:0, seed:seedOrBoardOptions };
   }
   // If seed is too large, the final digits don't parse correctly
-  if (seedOrSize > 10**14) failWithError("Seed too large. Must be less than 15 digits.");
+  if (seedOrBoardOptions > 10**14) failWithError("Seed too large. Must be less than 15 digits.");
   // seedOrSize is either a full seed (5 to 14 digits), or an options code (1 to 4 digits)
   // If an option digit is 0, or invalid, or unspecified, it will use the previously valid choice for that option
   // If the option code is just 1 digit, it will specify board size, and other digits will be 0
   // If seedOrSize is greater than 4 digits, the final 4 digits are the options code, and the earlier digits are the seed
-  const newBoardOptions = ( seedOrSize == null ? currentBoardOptions : seedOrSize.toString().slice(-4).padStart(4,0).split('').map(Number) );
+  const newBoardOptions = ( seedOrBoardOptions == null ? currentBoardOptions : seedOrBoardOptions.toString().slice(-4).padStart(4,0).split('').map(Number) );
   // Check for invalid options, and set them back to 0
   if (!(newBoardOptions[2] in allOperatorsOptions)) newBoardOptions[2] = 0;
   if (newBoardOptions[3] < 3) failWithError("Invalid board size: Must be between 3 and 9.");
@@ -107,19 +108,18 @@ function generateBoard(seedOrSize = null) {
   boardSize = currentBoardOptions[3]; // Option [3] is board size (must be between 3 and 9)
 
   // If a full seed is specified, use that, otherwise add the suffix to the rolling seed
-  const thisSeed = Number( ( seedOrSize > 9999 ? (~~(seedOrSize/10000))|0 : rollingSeed ) + currentBoardOptions.join('') );
-  const fallbackSeed = ( seedOrSize > 9999 ? (~~(seedOrSize/10000) + 0x6D2B79F5)|0 : '' ) + currentBoardOptions.join('');
-  const getRandom = initializePRNG( seedOrSize > 9999 ? ~~(thisSeed/10000) : null );
+  const trueSeed = ( seedOrBoardOptions > 9999 ? (~~(seedOrBoardOptions/10000))>>>0 : rollingSeed ); // Portion of seed used for RNG
+  const thisSeed = Number( trueSeed + currentBoardOptions.join('') ); // Full seed which also includes board options
+  const fallbackSeed = ( seedOrBoardOptions > 9999 ? (trueSeed + 0x6D2B79F5)>>>0 : '' ) + currentBoardOptions.join('');
+  const getRandom = initializePRNG( seedOrBoardOptions > 9999 ? trueSeed : null );
   logBlankLine();
   logToConsole("Start of puzzle generation with seed",thisSeed);
   
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
-  let failedGeneration = false;
   const startTime = Date.now();
 
   const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
-  const allIndexes = [...Array(boardSize).keys()];
   assignNumbers();
   function assignNumbers() {
     let numberAssignRetryCount = 0;
@@ -268,7 +268,7 @@ function generateBoard(seedOrSize = null) {
               "\nCell Indices:", x+y*boardSize, x+w+(y+h)*boardSize, x+w+y*boardSize, x+(y+h)*boardSize,
               "\nGenerating another board...");
             logBlankLine();
-            return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+            return generateAndValidateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
           }
         }
       }
@@ -325,14 +325,39 @@ function generateBoard(seedOrSize = null) {
         thisCell.candidates = thisCell.candidates.filter(i => ~~(thisCell.result/i) == thisCell.result/i);
     }
   });
-  const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
-  const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
-  operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
-  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
   updateCellBorders();
   logToConsole("Finished assigning operators.",
     "\nCurrent time is",Date.now()-startTime,"ms.",
     "\nCell Candidates:",cells.map(c => [...c.candidates]));
+  
+  //region Validate Board
+  const validationResult = validateBoard(startTime);
+  if ("error" in validationResult) {
+    logToConsole("Validation Failed:",validationResult["error"],"\nGenerating new board...");
+    logBlankLine();
+    return generateAndValidateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+  }
+  // Log the final output of seed and time, even if logging is disabled
+  console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms.");
+  cells.forEach(thisCell => {
+    thisCell.value = 0; // Hide the cell values
+    if (!isDebugMode) thisCell.candidates = []; // Hide candidates
+  });
+  adjustLayout();
+  listOfUndoStates = [];
+  saveUndoState();
+  updateCellDisplay();
+  return { time:Date.now()-startTime, seed:thisSeed }; // Return generation time and seed
+}
+
+function validateBoard(startTime) { // Validates the current board to ensure there is only one solution
+  
+  const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
+  const allIndexes = [...Array(boardSize).keys()];
+  const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
+  const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
+  operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
+  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
 
   let totalComboNodes = 0;
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
@@ -581,6 +606,7 @@ function generateBoard(seedOrSize = null) {
     "\nCombos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]));
   let totalNodeCount = 0;
   let solutionsFound = [];
+  let failedGeneration = false;
   testCombinations(cells.map(c => 0), [...groupList], copyCombos(combinationsByGroup));
   function testCombinations(cellTestValues, remainingGroups, remainingCombosByGroup) {
     if (remainingGroups.length == 0) {
@@ -629,22 +655,10 @@ function generateBoard(seedOrSize = null) {
     "\nTotal Nodes Searched:",totalNodeCount,
     "\nSolutions Found:",solutionsFound);
   if (failedGeneration) { // If multiple solutions have been found
-    logToConsole("Multiple solutions found in seed",thisSeed,"\nGenerating another board...");
-    logBlankLine();
-    return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+    return { error:"Multiple solutions found" };
+  } else {
+    return { success:true };
   }
-  // Log the final output of seed and time, even if logging is disabled
-  console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms.");
-
-  cells.forEach(thisCell => {
-    thisCell.value = 0; // Hide the cell values
-    if (!isDebugMode) thisCell.candidates = []; // Hide candidates
-  });
-  adjustLayout();
-  listOfUndoStates = [];
-  saveUndoState();
-  updateCellDisplay();
-  return { time:Date.now()-startTime, seed:thisSeed }; // Return generation time and seed
 }
 
 // region Randomizer
