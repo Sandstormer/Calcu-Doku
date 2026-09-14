@@ -11,6 +11,7 @@ let isConsoleOutput = true;
 const isDebugMode = false;
 
 let cells = []; // List of all cell elements
+let seed = {};
 let cellsByGroup = []; // Sublists of all cells, arranged by group
 let groupList = [];
 let operatorsByGroup = [];
@@ -83,7 +84,7 @@ function logBlankLine() {
 }
 
 //region Generate Board
-function generateAndValidateBoard(seedOrBoardOptions = null) {
+function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   
   function failWithError(errorString) {
     console.error(errorString);
@@ -108,16 +109,18 @@ function generateAndValidateBoard(seedOrBoardOptions = null) {
   boardSize = currentBoardOptions[3]; // Option [3] is board size (must be between 3 and 9)
 
   // If a full seed is specified, use that, otherwise add the suffix to the rolling seed
-  const trueSeed = ( seedOrBoardOptions > 9999 ? (~~(seedOrBoardOptions/10000))>>>0 : rollingSeed ); // Portion of seed used for RNG
-  const thisSeed = Number( trueSeed + currentBoardOptions.join('') ); // Full seed which also includes board options
-  const fallbackSeed = ( seedOrBoardOptions > 9999 ? (trueSeed + 0x6D2B79F5)>>>0 : '' ) + currentBoardOptions.join('');
-  const getRandom = initializePRNG( seedOrBoardOptions > 9999 ? trueSeed : null );
+  seed.true = ( seedOrBoardOptions > 9999 ? (~~(seedOrBoardOptions/10000))>>>0 : rollingSeed ); // Portion of seed used for RNG
+  seed.full = Number( seed.true + currentBoardOptions.join('') ); // Full seed which also includes board options
+  seed.fallback = ( seedOrBoardOptions > 9999 ? (seed.true + 0x6D2B79F5)>>>0 : '' ) + currentBoardOptions.join('');
+  seed.startTime = Date.now();
+  seed.totalStartTime = ( isRetry ? seed.totalStartTime : Date.now() );
+  seed.retryCount = ( isRetry ? seed.retryCount+1 : 0 );
+  const getRandom = initializePRNG( seedOrBoardOptions > 9999 ? seed.true : null );
   logBlankLine();
-  logToConsole("Start of puzzle generation with seed",thisSeed);
+  logToConsole("Start of puzzle generation with seed",seed.full);
   
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
-  const startTime = Date.now();
 
   const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
   assignNumbers();
@@ -161,7 +164,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null) {
       }
     }
     logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.",
-      "\nCurrent time is",Date.now()-startTime,"ms.",
+      "\nCurrent time is",Date.now()-seed.startTime,"ms.",
       "Cells after number placement:",cells);
   }
 
@@ -251,7 +254,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null) {
     groupList = [...Array(thisGroup).keys()];
   }
   cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
-  logToConsole("Finished assigning groups. Current time is",Date.now()-startTime,"ms.","\nCells by Group:",cellsByGroup);
+  logToConsole("Finished assigning groups. Current time is",Date.now()-seed.startTime,"ms.","\nCells by Group:",cellsByGroup);
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
   // This is a quick identifier of multiple solutions                                [ 3 , 1 ]
@@ -264,11 +267,11 @@ function generateAndValidateBoard(seedOrBoardOptions = null) {
             && ( ( cells[x+y*boardSize].group == cells[x+w+y*boardSize].group && cells[x+(y+h)*boardSize].group == cells[x+w+(y+h)*boardSize].group ) 
               || ( cells[x+y*boardSize].group == cells[x+(y+h)*boardSize].group && cells[x+w+y*boardSize].group == cells[x+w+(y+h)*boardSize].group ) )
           ) {
-            logToConsole("Square Degen found in seed",thisSeed,
+            logToConsole("Square Degen found in seed",seed.full,
               "\nCell Indices:", x+y*boardSize, x+w+(y+h)*boardSize, x+w+y*boardSize, x+(y+h)*boardSize,
               "\nGenerating another board...");
             logBlankLine();
-            return generateAndValidateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+            return generateAndValidateBoard(seed.fallback,true); // Terminate the current puzzle and generate a completely new puzzle
           }
         }
       }
@@ -327,18 +330,19 @@ function generateAndValidateBoard(seedOrBoardOptions = null) {
   });
   updateCellBorders();
   logToConsole("Finished assigning operators.",
-    "\nCurrent time is",Date.now()-startTime,"ms.",
+    "\nCurrent time is",Date.now()-seed.startTime,"ms.",
     "\nCell Candidates:",cells.map(c => [...c.candidates]));
   
   //region Validate Board
-  const validationResult = validateBoard(startTime);
-  if ("error" in validationResult) {
-    logToConsole("Validation Failed:",validationResult["error"],"\nGenerating new board...");
+  const validationResult = validateBoard(seed.startTime);
+  if (validationResult != "success") {
+    logToConsole("Validation Failed:",validationResult,"\nGenerating new board...");
     logBlankLine();
-    return generateAndValidateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+    return generateAndValidateBoard(seed.fallback,true); // Terminate the current puzzle and generate a completely new puzzle
   }
   // Log the final output of seed and time, even if logging is disabled
-  console.log("Finished puzzle generation of seed",thisSeed,"with a time of",Date.now()-startTime,"ms.");
+  console.log("Finished puzzle generation of seed",seed.full,"with an individual time of",Date.now()-seed.startTime,"ms.",
+    "\nIn total, generated",seed.retryCount+1,"puzzles with a total time of",Date.now()-seed.totalStartTime,"ms.");
   cells.forEach(thisCell => {
     thisCell.value = 0; // Hide the cell values
     if (!isDebugMode) thisCell.candidates = []; // Hide candidates
@@ -347,10 +351,10 @@ function generateAndValidateBoard(seedOrBoardOptions = null) {
   listOfUndoStates = [];
   saveUndoState();
   updateCellDisplay();
-  return { time:Date.now()-startTime, seed:thisSeed }; // Return generation time and seed
+  return { time:Date.now()-seed.startTime, seed:seed.full }; // Return generation time and seed
 }
 
-function validateBoard(startTime) { // Validates the current board to ensure there is only one solution
+function validateBoard() { // Validates the current board to ensure there is only one solution
   
   const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
   const allIndexes = [...Array(boardSize).keys()];
@@ -396,7 +400,7 @@ function validateBoard(startTime) { // Validates the current board to ensure the
   }
   let totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
   logToConsole("Finished generating initial group combos, via",totalComboNodes,"nodes.",
-    "\nCurrent time is",Date.now()-startTime,"ms.",
+    "\nCurrent time is",Date.now()-seed.startTime,"ms.",
     "\nCombos By Group:",combinationsByGroup,
     "\nThere are",totalCombinations,"total group combos.");
 
@@ -435,7 +439,7 @@ function validateBoard(startTime) { // Validates the current board to ensure the
   // These are techniques that a human would use to solve a puzzle
   let totalCombinationsPrev = null;
   let techniquesPassCount = 0;
-  logToConsole("Starting Techniques.\nCurrent time is",Date.now()-startTime,"ms.");
+  logToConsole("Starting Techniques.\nCurrent time is",Date.now()-seed.startTime,"ms.");
   function getCellCandsFromGroupCombos() { // Get individual cell candidates from the group combos
     groupList.forEach(thisGroup => cellsByGroup[thisGroup].forEach((c,i) =>
       c.candidates = [...new Set(combinationsByGroup[thisGroup].map(thisCombo => thisCombo[i]))].filter(value => c.candidates.includes(value)).sort() ));
@@ -552,7 +556,7 @@ function validateBoard(startTime) { // Validates the current board to ensure the
     // Report the end of this pass
     logToConsole("Finished Pass",techniquesPassCount=techniquesPassCount+1,"of Techniques.",
       "\nThere are",totalCombinations,"total group combos.",
-      "\nCurrent time is",Date.now()-startTime,"ms.",
+      "\nCurrent time is",Date.now()-seed.startTime,"ms.",
       "\nCombos By Group:",combinationsByGroup,
       "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)]);
     // "Dead End" Technique: Test each combo and see if it invalidates another group right away
@@ -577,31 +581,31 @@ function validateBoard(startTime) { // Validates the current board to ensure the
       totalCombinations = combinationsByGroup.reduce((total, theseCombos) => total + theseCombos.length, 0);
       logToConsole("Finished Dead End Technique after Pass",techniquesPassCount,
         "\nThere are",totalCombinations,"total group combos.",
-        "\nCurrent time is",Date.now()-startTime,"ms.",
+        "\nCurrent time is",Date.now()-seed.startTime,"ms.",
         "\nCombos By Group:",combinationsByGroup,
         "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)]);
     }
   }
   logToConsole("Finished All Techniques after",techniquesPassCount,"Passes.",
         "\nThere are",totalCombinations,"total group combos.",
-        "\nCurrent time is",Date.now()-startTime,"ms.",
+        "\nCurrent time is",Date.now()-seed.startTime,"ms.",
         "\nCombos By Group:",combinationsByGroup,
         "\nCells By Group:",cellsByGroup,
         "\nCombo Counts:",[...combinationsByGroup.map(c => c.length)],
         "\nCombo Counts Excess Sum:",totalCombinations - combinationsByGroup.length);
   getCellCandsFromGroupCombos();
   // if (totalCombinations - combinationsByGroup.length > boardSize**3) { // If too much trial and error is required for a human to solve
-  //   logToConsole("Board with seed",thisSeed,"is too hard for humans, with",totalCombinations,"combinations.")
+  //   logToConsole("Board with seed",seed.full,"is too hard for humans, with",totalCombinations,"combinations.")
   //   logToConsole("Generating another board...");
   //   logBlankLine();
-  //   return generateBoard(fallbackSeed); // Terminate the current puzzle and generate a completely new puzzle
+  //   return generateBoard(seed.fallback); // Terminate the current puzzle and generate a completely new puzzle
   // }
 
   //region Recursive Solver
   // This is the final recursive search, which solves the puzzle
   // It tests all the combinations of each group, terminating branches which are invalid
   groupList.sort((a,b) => combinationsByGroup[b].length-combinationsByGroup[a].length);
-  logToConsole("Starting Final Search. Current time is",Date.now()-startTime,"ms.",
+  logToConsole("Starting Final Search. Current time is",Date.now()-seed.startTime,"ms.",
     "\nSorted Group List:",groupList,
     "\nCombos By Sorted Group List:",groupList.map( thisGroup => combinationsByGroup[thisGroup]));
   let totalNodeCount = 0;
@@ -635,7 +639,9 @@ function validateBoard(startTime) { // Validates the current board to ensure the
             )
           )
         );
-        // logToConsole("Node Count:",totalNodeCount,"- Combo Total:",theseRemainingCombos.reduce((total, c) => total + c.length, 0)," - Combos:",remainingGroups.map(secGroup => theseRemainingCombos[secGroup]));
+        // logToConsole("Node Count:",totalNodeCount,
+        //   "\nCombo Total:",theseRemainingCombos.reduce((total, c) => total + c.length, 0),
+        //   "\nCombos:",remainingGroups.map(secGroup => theseRemainingCombos[secGroup]));
         remainingGroups.sort((a,b) => theseRemainingCombos[b].length-theseRemainingCombos[a].length);
         testCombinations([...cellTestValues], [...remainingGroups], theseRemainingCombos);
       }
@@ -654,11 +660,8 @@ function validateBoard(startTime) { // Validates the current board to ensure the
   logToConsole("Finished Final Search.",
     "\nTotal Nodes Searched:",totalNodeCount,
     "\nSolutions Found:",solutionsFound);
-  if (failedGeneration) { // If multiple solutions have been found
-    return { error:"Multiple solutions found" };
-  } else {
-    return { success:true };
-  }
+  // Return a failure if multiple solutions have been found, or a success if the board is valid
+  return ( failedGeneration ? "Multiple solutions found" : "success" );
 }
 
 // region Randomizer
