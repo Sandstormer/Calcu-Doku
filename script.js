@@ -156,7 +156,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
         newCell.group = null;
         newCell.candidates = [...allNumsToGive];
         newCell.isLeader = false;
-        newCell.addEventListener('click',     () => updateCellHighlight(newCell));
+        newCell.addEventListener('click',     () => updateCellHighlight(newCell, false, true));
         newCell.addEventListener('mouseover', () => updateCellHighlight(newCell, true));
         newCell.addEventListener('mouseout',  () => updateCellHighlight(null, true));
         newRow.appendChild(newCell);
@@ -807,19 +807,17 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
   });
   updateCellHighlight(newClickTarget);
 }
-function updateCellHighlight(newClickTarget = clickTarget, isHover = false) { // Update the cell background color
-  if (isHover == false && newClickTarget == clickTarget) {
+function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isClick = false) { // Update the cell background color
+  if (isClick && newClickTarget == clickTarget) {
     isHoverAllowed = !isHoverAllowed; // Prevent hovers if you click on a cell
   }
-  if (!isHover || isHoverAllowed) {
-    if (newClickTarget != clickTarget) {
-      tempUndoState = [];
-      clickTarget = newClickTarget;
-    }
-    cells.forEach(thisCell => // Highlight the cell if it is selected
-      thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.purple ) : color.cell )
-    );
+  if (!isHover || isHoverAllowed && newClickTarget != clickTarget) {
+    tempUndoState = [];
+    clickTarget = newClickTarget;
   }
+  cells.forEach(thisCell => // Highlight the cell if it is selected
+    thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.purple ) : color.cell )
+  );
   inputButtons.forEach( (newButton,thisNum) => { // Set the color of each number input button
     newButton.style.backgroundColor = ( thisNum == 0 ? color.grey : // "Clear" button is always grey
       ( clickTarget == null ? color.cell : // No color if not selected
