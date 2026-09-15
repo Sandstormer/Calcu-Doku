@@ -128,12 +128,10 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   function assignNumbers() {
     let numberAssignRetryCount = 0;
     for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
-      const newRow = document.createElement('div'); 
-      newRow.className = 'row';
+      const newRow = quickElement('div','row');
       boardContainer.appendChild(newRow);
       for (let j = 0; j < boardSize && numberAssignRetryCount < 1000; j++) {
-        const newCell = document.createElement('div'); 
-        newCell.className = 'cell';
+        const newCell = quickElement('div','cell');
         newCell.row = i;
         newCell.col = j;
         newCell.index = j + i * boardSize;
@@ -708,6 +706,12 @@ function isGroupResultCorrect(thisGroup) {
   }
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
 }
+function quickElement(type, className, innerHTML = '') {
+    const newElement = document.createElement(type);
+    newElement.className = className;
+    newElement.innerHTML = innerHTML;
+    return newElement;
+}
 
 //region Adjust Layout
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
@@ -743,9 +747,7 @@ function adjustLayout() {
     inputContainer.innerHTML = "";
     inputButtons = [];
     [...Array(boardSize+1).keys()].forEach( thisNum => {
-      const newButton = document.createElement("div");
-      newButton.className = "input-button";
-      newButton.innerHTML = thisNum || "C";
+      const newButton = quickElement("div","input-button",thisNum || "C");
       newButton.style.backgroundColor = color.cell;
       newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
       inputButtons.push(newButton);
@@ -777,15 +779,11 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
         thisCell.classList.add("completion-animation");
         thisCell.style.setProperty("--anim-delay", (thisCell.row + thisCell.col)/boardSize);
       });
-      const completionBanner = document.createElement("div");
-      completionBanner.className = `completion-banner ${ isMobile ? "thin-shadow" : "thick-shadow" }`;
-      completionBanner.innerHTML = "";
+      const completionBanner = quickElement("div",`completion-banner ${ isMobile ? "thin-shadow" : "thick-shadow" }`);
       ["Puzzle","Complete!"].forEach((thisPhrase,thisIndex) => {
-        if (thisIndex) completionBanner.appendChild(document.createElement("br"));
+        if (thisIndex) completionBanner.appendChild(quickElement("br"));
         [...thisPhrase].forEach((thisChar,animDelay) => {
-          const charElement = document.createElement("span");
-          charElement.className = "completion-letter";
-          charElement.innerHTML = thisChar;
+          const charElement = quickElement("span","completion-letter",thisChar);
           charElement.style.setProperty("--anim-delay", animDelay + thisIndex*6);
           completionBanner.appendChild(charElement);
         });
