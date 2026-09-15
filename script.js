@@ -12,12 +12,13 @@ const isDebugMode = false;
 
 let cells = []; // List of all cell elements
 let seed = {};
+let states = { undo:[], forgive:[], saved:[] };
+// Group information
 let cellsByGroup = []; // Sublists of all cells, arranged by group
 let groupList = [];
 let operatorsByGroup = [];
 let resultByGroup = [];
-let listOfUndoStates = [];
-let tempUndoState = [];
+
 let inputButtons = [];
 let clickTarget = null; // Which cell is selected for number entry
 let rollingSeed = getDailySeed(); // Daily seed
@@ -254,6 +255,8 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
     groupList = [...Array(thisGroup).keys()];
   }
   cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
+  operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
+  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
   logToConsole("Finished assigning groups. Current time is",Date.now()-seed.startTime,"ms.","\nCells by Group:",cellsByGroup);
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
@@ -348,7 +351,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
     if (!isDebugMode) thisCell.candidates = []; // Hide candidates
   });
   adjustLayout();
-  listOfUndoStates = [];
+  states.undo = [];
   saveUndoState();
   updateCellDisplay();
   return { time:Date.now()-seed.startTime, seed:seed.full }; // Return generation time and seed
@@ -360,8 +363,6 @@ function validateBoard() { // Validates the current board to ensure there is onl
   const allIndexes = [...Array(boardSize).keys()];
   const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
-  operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
-  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
 
   let totalComboNodes = 0;
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
@@ -422,7 +423,7 @@ function validateBoard() { // Validates the current board to ensure there is onl
     // Output: [list of indexes of cells in other groups which are impacted by this cell]
     thisCell.impactedCells.filter(c => c.group != thisCell.group).map(c => c.index))
   );
-  orderToOrderImpact = groupList.map( thisGroup => 
+  const orderToOrderImpact = groupList.map( thisGroup => 
     // Input:  [thisGroup][orderInGroup][secondGroup]
     // Output: [list of orders in second group that are impacted]
     cellsByGroup[thisGroup].map( thisCell =>
@@ -711,18 +712,19 @@ function isGroupResultCorrect(thisGroup) {
 //region Adjust Layout
 window.addEventListener("resize", adjustLayout); // Run on page load and when resizing the window
 function adjustLayout() {
-  const [height,width] = [document.documentElement.clientHeight,document.documentElement.clientWidth];
+  const [height,width,style] = [document.documentElement.clientHeight,document.documentElement.clientWidth,document.documentElement.style];
   const newIsMobile = (width <= 768);
-  // Set dimensions of everything to be integers, to prevent subpixel rounding
   const minFullAxis = Math.min(height,width);
+  // Using initial dimensions of screen, calculate size of UI elements
   const inputButtonDimensions = ~~Math.max(40, Math.min(80, minFullAxis*0.1)*boardSize/(boardSize+1));
-  document.documentElement.style.setProperty("--input-size", `${inputButtonDimensions}px`);
+  style.setProperty("--input-size", `${inputButtonDimensions}px`);
   const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+10);
-  document.documentElement.style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
+  style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
   const borderDimensions = ~~(minFullAxis*0.015)+2;
-  document.documentElement.style.setProperty("--border-size", `${borderDimensions}px`);
+  style.setProperty("--border-size", `${borderDimensions}px`);
   const viewFillRatioW = Math.max( 0.85, Math.min( 1, 1.35 -  width * 0.0005 )); // Up to 15% w margin on large screens
   const viewFillRatioH = Math.max( 0.91, Math.min( 1, 1.21 - height * 0.0003 )); // Up to  9% h margin on large screens
+  // Subtract size of UI elements from screen to determine remaining space left for board
   const minScreenAxis = Math.min( width * viewFillRatioW,
     (height-inputButtonDimensions-pencilButtonDimensions-3*borderDimensions-28)*viewFillRatioH);
   const totalBorderCount = 2*(boardSize+1);
@@ -730,12 +732,14 @@ function adjustLayout() {
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
-    document.documentElement.style.setProperty("--cell-size", `${cellDimensions}px`);
-    document.documentElement.style.setProperty("--row-size", `${cellDimensions+4}px`);
-    document.documentElement.style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
+    // Set dimensions of everything to be integers, to prevent subpixel rounding
+    style.setProperty("--cell-size", `${cellDimensions}px`);
+    style.setProperty("--row-size", `${cellDimensions+4}px`);
+    style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
     if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > width) { // Shrink border if overflowing on width
-      document.documentElement.style.setProperty("--border-size", `${~~((width - boardContainer.offsetWidth) / 2)}px`);
+      style.setProperty("--border-size", `${~~((width - boardContainer.offsetWidth) / 2)}px`);
     }
+    // Create all the buttons for number input
     inputContainer.innerHTML = "";
     inputButtons = [];
     [...Array(boardSize+1).keys()].forEach( thisNum => {
@@ -812,7 +816,7 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
     isHoverAllowed = !isHoverAllowed; // Prevent hovers if you click on a cell
   }
   if (!isHover || isHoverAllowed && newClickTarget != clickTarget) {
-    tempUndoState = [];
+    states.forgive = []; // Clear the temp state of candidate removal forgiveness
     clickTarget = newClickTarget;
   }
   cells.forEach(thisCell => // Highlight the cell if it is selected
@@ -869,13 +873,13 @@ document.addEventListener('keydown', (event) => {
     }
   }
   if (event.key == 'Backspace') { // Undo the last action
-    if (listOfUndoStates.length > 1) {
-      const stateToRecover = listOfUndoStates[listOfUndoStates.length-2];
+    if (states.undo.length > 1) {
+      const stateToRecover = states.undo[states.undo.length-2];
       cells.forEach( (thisCell,thisIndex) => {
         thisCell.value = stateToRecover.values[thisIndex];
         thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
       });
-      updateCellDisplay(listOfUndoStates.pop().clickTarget);
+      updateCellDisplay(states.undo.pop().clickTarget);
     }
   };
 });
@@ -895,10 +899,10 @@ function tryToEnterNumber(thisNum) {
       clickTarget.value = thisNum;
       clickTarget.candidates = [];
       // Save a temporary undo state to recover candidates if multiple values are entered in succession
-      if (tempUndoState.length) {
-        cells.forEach( (thisCell,thisIndex) => thisCell.candidates = [...tempUndoState[thisIndex]] );
+      if (states.forgive.length) {
+        cells.forEach( (thisCell,thisIndex) => thisCell.candidates = [...states.forgive[thisIndex]] );
       } else {
-        tempUndoState = cells.map(c => c.candidates);
+        states.forgive = cells.map(c => c.candidates);
       }
       // Remove that number from the candidate list of impacted cells
       clickTarget.impactedCells.forEach( c => c.candidates = c.candidates.filter( i => i != thisNum ));
@@ -908,7 +912,7 @@ function tryToEnterNumber(thisNum) {
   }
 }
 function saveUndoState() {
-  listOfUndoStates.push({
+  states.undo.push({
     values: cells.map(c => c.value),
     candidates: cells.map(c => c.candidates),
     clickTarget: clickTarget,
