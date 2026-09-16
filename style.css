@@ -14,7 +14,50 @@ body {
 div {
   line-height: 1.125;
 }
-#main-container {
+.hidden {
+  display: none !important;
+}
+
+#menu-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 300;
+  height: var(--board-size);
+  width: var(--board-size);
+  background-color: #E0E0E0;
+  border: 6px solid black;
+  outline: var(--border-size) solid #252129;
+  overflow-x: hidden;
+  margin: auto;
+  padding: 2px;
+  border-radius: 1px;
+}
+.menu-row {
+  display: flex;
+  flex-direction: row;
+  flex-grow: 1;
+}
+.menu-button {
+  display: flex;
+  position: relative;
+  border: 6px solid black;
+  border-radius: 4px;
+  margin: 2px;
+  background-color: #EEEEEE;
+  background-clip: content-box;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1/1;
+  font-size: calc(0.1 * var(--board-size));
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#game-container {
   padding: var(--border-size);
   overflow-x: hidden;
   margin: auto;
@@ -50,7 +93,7 @@ div {
   margin: -4px;
   background-color: #EEEEEE;
   background-clip: content-box;
-  min-height: 50px;
+  min-height: 30px;
   aspect-ratio: 1/1;
   cursor: pointer;
 }

@@ -1,3 +1,5 @@
+const menuContainer   = document.getElementById("menu-container");
+const gameContainer   = document.getElementById("game-container");
 const boardContainer  = document.getElementById("board-container");
 const inputContainer  = document.getElementById("input-container");
 const pencilContainer = document.getElementById("pencil-container");
@@ -41,14 +43,43 @@ const allOperatorsOptions = {
   8: [0,1,2,3,4,5], // Blind
   // 9: [], // Reserved (currently not implemented)
 }
+const menuBoardOptions = [
+  [
+    [3], [4], [5]
+  ],
+  [
+    [6], [7], [8]
+  ],
+  [
+    [6], [7], [8]
+  ]
+]
 const color = {
   black:'rgb(  0,  0,  0)', green: 'rgb(  0, 150,   0)', red:   'rgb(220,  30,   0)',
   cell: 'rgb(238,238,238)', purple:'rgb(173, 165, 255)', yellow:'rgb(240, 230, 140)',
   grey: 'rgb(160,160,160)',
 };
 
-generateAndValidateBoard(boardSize);
+// return to menu
+// stable seeds
+
+adjustLayout(); // Initial adjustment of layout
+// generateAndValidateBoard(boardSize);
 // generateAndValidateBoard(8236058721118);
+menuBoardOptions.forEach( row => {
+  const newRow = quickElement('div','menu-row');
+  row.forEach( boardOptions => {
+    const buttonText = boardOptions?.[1] || `${boardOptions[0]}×${boardOptions[0]}`;
+    const newButton = quickElement('div','menu-button',buttonText);
+    newButton.addEventListener('click', () => {
+      menuContainer.classList.add("hidden");
+      gameContainer.classList.remove("hidden");
+      generateAndValidateBoard(boardOptions[0]);
+    });
+    newRow.appendChild(newButton);
+  });
+  menuContainer.appendChild(newRow);
+});
 
 function findHardestBoard(amount, boardOptions = currentBoardOptions) {
   let hardestBoard = { time:0, seed:null };
@@ -724,15 +755,15 @@ function adjustLayout() {
   style.setProperty("--input-size", `${inputButtonDimensions}px`);
   const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+10);
   style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
-  const borderDimensions = ~~(minFullAxis*0.015)+2;
-  style.setProperty("--border-size", `${borderDimensions}px`);
+  const outerBorderDimensions = ~~(minFullAxis*0.015)+2;
+  style.setProperty("--border-size", `${outerBorderDimensions}px`);
   const viewFillRatioW = Math.max( 0.85, Math.min( 1, 1.35 -  width * 0.0005 )); // Up to 15% w margin on large screens
   const viewFillRatioH = Math.max( 0.91, Math.min( 1, 1.21 - height * 0.0003 )); // Up to  9% h margin on large screens
   // Subtract size of UI elements from screen to determine remaining space left for board
   const minScreenAxis = Math.min( width * viewFillRatioW,
-    (height-inputButtonDimensions-pencilButtonDimensions-3*borderDimensions-28)*viewFillRatioH);
-  const totalBorderCount = 2*(boardSize+1);
-  const newCellDimensions = Math.max( ~~( (minScreenAxis-totalBorderCount)/(boardSize+0.25) ) - 4, 50);
+    (height-inputButtonDimensions-pencilButtonDimensions-3*outerBorderDimensions-28)*viewFillRatioH);
+  const innerBorderTotalDimensions = 2*(boardSize+1);
+  const newCellDimensions = Math.max( ~~( (minScreenAxis-innerBorderTotalDimensions-2*outerBorderDimensions)/boardSize ) - 4, 30);
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
