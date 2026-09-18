@@ -16,6 +16,7 @@ const isDebugMode = false;
 let cells = []; // List of all cell elements
 let seed = {};
 let states = { undo:[], forgive:[], saved:[] };
+let dragging = { isDragging:false, source:null, target:null };
 // Group information
 let groupList = []; // List of all group indices
 let cellsByGroup = []; // Sublists of all cells, arranged by group
@@ -56,9 +57,9 @@ const menuBoardOptions = [
   ]
 ]
 const color = {
-  black:'rgb(  0,  0,  0)', green: 'rgb(  0, 150,   0)', red:   'rgb(220,  30,   0)',
-  cell: 'rgb(238,238,238)', purple:'rgb(173, 165, 255)', yellow:'rgb(240, 230, 140)',
-  grey: 'rgb(160,160,160)',
+  black:  'rgb(  0,  0,  0)', grey: 'rgb(160,160,160)',  cell:  'rgb(238,238,238)',
+  green:  'rgb(  0,150,  0)', red:  'rgb(220, 30,  0)', yellow: 'rgb(240,230,140)',
+  purple: 'rgb(140, 130, 240)', lightPurple:'rgb(173, 165, 255)', blue: 'rgb(130, 200, 250)',
 };
 
 //region Main Menu
@@ -814,9 +815,22 @@ function isGroupResultCorrect(thisGroup) {
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
 }
 function addCellEventListeners(thisCell) {
-  thisCell.addEventListener('click',     () => updateCellHighlight(thisCell, false, true));
-  thisCell.addEventListener('mouseover', () => updateCellHighlight(thisCell, true));
-  thisCell.addEventListener('mouseout',  () => updateCellHighlight(null, true));
+  thisCell.addEventListener("mouseout",  () => updateCellHighlight(null, true));
+  thisCell.addEventListener("mousedown", () => {
+    dragging = { isDragging:true, source:thisCell, target:null };
+  });
+  thisCell.addEventListener("mouseover", () => {
+    updateCellHighlight(thisCell, true);
+    if (dragging.isDragging && (dragging.source != thisCell || dragging.target != null) ) dragging.target = thisCell;
+  });
+  thisCell.addEventListener("mouseup", () => {
+    updateCellHighlight(thisCell, false, (dragging.source==thisCell && dragging.target==null) );
+    if (dragging.isDragging && dragging.target && dragging.target != dragging.source) {
+      dragging.target.candidates = [...dragging.source.candidates];
+      updateCellDisplay();
+    }
+    dragging = { isDragging:false, source:null, target:null };
+  });
 }
 function quickElement(type, className, innerHTML = '') {
     const newElement = document.createElement(type);
@@ -922,20 +936,22 @@ function updateCellDisplay(newClickTarget = clickTarget) { // Update the cell di
   updateCellHighlight(newClickTarget);
 }
 function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isClick = false) { // Update the cell background color
-  if (isClick && newClickTarget == clickTarget) {
+  if ( isClick && newClickTarget == clickTarget ) {
     isHoverAllowed = !isHoverAllowed; // Prevent hovers if you click on a cell
   }
-  if (!isHover || isHoverAllowed && newClickTarget != clickTarget) {
+  if ( (!isHover || isHoverAllowed || dragging.isDragging) && newClickTarget != clickTarget ) {
     states.forgive = []; // Clear the temp state of candidate removal forgiveness
     clickTarget = newClickTarget;
   }
   cells.forEach(thisCell => // Highlight the cell if it is selected
-    thisCell.style.backgroundColor = ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.purple ) : color.cell )
+    thisCell.style.backgroundColor = ( dragging.isDragging 
+      ? ( dragging.source == thisCell ? color.yellow : ( clickTarget == thisCell ? color.blue : color.cell ) )
+      : ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.lightPurple ) : color.cell ) )
   );
   inputButtons.forEach( (newButton,thisNum) => { // Set the color of each number input button
     newButton.style.backgroundColor = ( thisNum == 0 ? color.grey : // "Clear" button is always grey
       ( clickTarget == null ? color.cell : // No color if not selected
-        ( clickTarget.value ? ( clickTarget.value == thisNum ? color.purple : color.grey ) : // Purple if value is selected
+        ( clickTarget.value ? ( clickTarget.value == thisNum ? color.lightPurple : color.grey ) : // Purple if value is selected
           ( clickTarget.candidates.includes(thisNum) ? color.yellow : // Yellow if in candidate list
             ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell ) // Grey if duplicate in line
           )
@@ -948,7 +964,7 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
 function updatePencilDisplay(isHover = false) {
   pencilContainer.innerHTML = 
     `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
-    <div class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.purple : color.cell )};">Pencil Mode</div>`;
+    <div class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.lightPurple : color.cell )};">Pencil Mode</div>`;
 }
 function togglePencilMode() {
   isPencilMode = !isPencilMode;

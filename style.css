@@ -95,12 +95,14 @@ div {
   background-clip: content-box;
   min-height: 30px;
   aspect-ratio: 1/1;
+  user-select: none;
   cursor: pointer;
 }
 .cell-value {
   font-size: 80px;
   line-height: 100%;
   margin: auto;
+  user-select: none;
   pointer-events: none;
 }
 .mod-text {
@@ -108,6 +110,7 @@ div {
   position: absolute;
   top: 5%;
   left: 5%;
+  user-select: none;
   pointer-events: none;
 }
 .candidates {
@@ -117,6 +120,7 @@ div {
   top: 97%;
   right: 5%;
   transform: translateY(-100%);
+  user-select: none;
   pointer-events: none;
 }
 
