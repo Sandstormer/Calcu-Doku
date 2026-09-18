@@ -53,7 +53,7 @@ const menuBoardOptions = [
     [6], [7], [8]
   ],
   [
-    [6], [7], [8]
+    [9], [66,"Mono +"], [76,"Mono ×"]
   ]
 ]
 const color = {

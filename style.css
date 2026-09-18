@@ -38,21 +38,19 @@ div {
 .menu-row {
   display: flex;
   flex-direction: row;
-  flex-grow: 1;
+  flex: 1;
 }
 .menu-button {
   display: flex;
-  position: relative;
   border: 6px solid black;
   border-radius: 4px;
   margin: 2px;
   background-color: #EEEEEE;
-  background-clip: content-box;
   min-height: 50px;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1/1;
-  font-size: calc(0.1 * var(--board-size));
+  font-size: calc(0.06 * var(--board-size));
   font-weight: bold;
   cursor: pointer;
 }
