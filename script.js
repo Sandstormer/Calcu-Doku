@@ -47,13 +47,13 @@ const allOperatorsOptions = {
 }
 const menuBoardOptions = [
   [
-    [3], [4], [5]
+    [13,"3×3"], [14,"4×4"], [15,"5×5"]
   ],
   [
-    [6], [7], [8]
+    [16,"6×6"], [17,"7×7"], [18,"8×8"]
   ],
   [
-    [9], [66,"Mono +"], [76,"Mono ×"]
+    [19,"9×9"], [66,"Mono +"], [76,"Mono ×"]
   ]
 ]
 const color = {
@@ -67,8 +67,7 @@ adjustLayout(); // Initial adjustment of layout
 menuBoardOptions.forEach( row => { // Create the main menu buttons
   const newRow = quickElement('div','menu-row');
   row.forEach( boardOptions => {
-    const buttonText = boardOptions?.[1] || `${boardOptions[0]}×${boardOptions[0]}`;
-    const newButton = quickElement('div','menu-button',buttonText);
+    const newButton = quickElement('div','menu-button',boardOptions[1]);
     newButton.addEventListener('click', () => generateAndValidateBoard(getDailySeed(boardOptions[0])));
     newRow.appendChild(newButton);
   });
