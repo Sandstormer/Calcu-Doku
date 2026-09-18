@@ -3,6 +3,7 @@ const gameContainer   = document.getElementById("game-container");
 const boardContainer  = document.getElementById("board-container");
 const inputContainer  = document.getElementById("input-container");
 const pencilContainer = document.getElementById("pencil-container");
+const characterMap = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'; 
 const opSymbols = ['','+','×','−','÷','?'];
 
 let isMobile = false; // Whether display is altered for mobile devices
@@ -16,9 +17,9 @@ let cells = []; // List of all cell elements
 let seed = {};
 let states = { undo:[], forgive:[], saved:[] };
 // Group information
+let groupList = []; // List of all group indices
 let cellsByGroup = []; // Sublists of all cells, arranged by group
-let groupList = [];
-let operatorsByGroup = [];
+let operatorByGroup = [];
 let resultByGroup = [];
 
 let inputButtons = [];
@@ -60,27 +61,25 @@ const color = {
   grey: 'rgb(160,160,160)',
 };
 
-// return to menu
-// stable seeds
-
+//region Main Menu
 adjustLayout(); // Initial adjustment of layout
-// generateAndValidateBoard(boardSize);
-// generateAndValidateBoard(8236058721118);
-menuBoardOptions.forEach( row => {
+menuBoardOptions.forEach( row => { // Create the main menu buttons
   const newRow = quickElement('div','menu-row');
   row.forEach( boardOptions => {
     const buttonText = boardOptions?.[1] || `${boardOptions[0]}×${boardOptions[0]}`;
     const newButton = quickElement('div','menu-button',buttonText);
-    newButton.addEventListener('click', () => {
-      menuContainer.classList.add("hidden");
-      gameContainer.classList.remove("hidden");
-      generateAndValidateBoard(boardOptions[0]);
-    });
+    newButton.addEventListener('click', () => generateAndValidateBoard(getDailySeed(boardOptions[0])));
     newRow.appendChild(newButton);
   });
   menuContainer.appendChild(newRow);
 });
+function returnToMainMenu(errorString = null) {
+  if (errorString) console.error(errorString);
+  menuContainer.classList.remove("hidden");
+  gameContainer.classList.add("hidden");
+}
 
+//region Utility Functions
 function findHardestBoard(amount, boardOptions = currentBoardOptions) {
   let hardestBoard = { time:0, seed:null };
   isConsoleOutput = false;
@@ -101,7 +100,7 @@ function benchmark(amount, boardOptions = currentBoardOptions) {
   const operatorCount = [0,0,0,0];
   for (let i = 0; i < amount; i++) {
     generateAndValidateBoard(boardOptions);
-    operatorCount.forEach((_,i) => operatorCount[i] += operatorsByGroup.filter(c => c == i+1).length);
+    operatorCount.forEach((_,i) => operatorCount[i] += operatorByGroup.filter(c => c == i+1).length);
   }
   isConsoleOutput = true;
   logToConsole("Occurrences of each operator:",operatorCount.flatMap((c,i) => [opSymbols[i+1],c]));
@@ -115,15 +114,92 @@ function logBlankLine() {
   if (isConsoleOutput) console.log();
 }
 
+//region Import/Export String
+function exportBoardToString() {
+  if (gameContainer.classList.contains("hidden")) return returnToMainMenu("No board to export");
+  let exportedString = '';
+  groupList.forEach( thisGroup => {
+    exportedString += characterMap[operatorByGroup[thisGroup]];
+    exportedString += resultByGroup[thisGroup];
+  });
+  cells.forEach( thisCell => {
+    exportedString += characterMap[thisCell.group];
+  });
+  return exportedString;
+}
+function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") {
+  // Decode the imported string, to get data of groups and cells
+  const pairs = [...importedString.matchAll(/[a-z]+\d+/g)].map(m => m[0]);
+  operatorByGroup = pairs.map( thisPair => [...characterMap].findIndex(i => i == thisPair[0]) );
+  resultByGroup = pairs.map( thisPair => Number(thisPair.slice(1)) );
+  foundChars = {}; // Convert group character to number, and re-order groups from zero
+  importedCellGroups = [...importedString.slice(pairs.join('').length)].map( thisChar => {
+    if (thisChar in foundChars) {
+      return foundChars[thisChar];
+    } else {
+      return foundChars[thisChar] = Object.keys(foundChars).length;
+    }
+  });
+  groupList = [...Object.values(foundChars)];
+  boardSize = ~~(importedCellGroups.length ** 0.5);
+  if (importedCellGroups.length != boardSize**2) returnToMainMenu("Incomplete cell data");
+  seed.startTime = Date.now();
+  // Create the cell elements, based on the data
+  cells = []; // Clear all cell info
+  boardContainer.innerHTML = '';
+  for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
+    const newRow = quickElement('div','row');
+    boardContainer.appendChild(newRow);
+    for (let j = 0; j < boardSize; j++) {
+      const newCell = quickElement('div','cell');
+      newCell.row = i;
+      newCell.col = j;
+      newCell.index = j + i * boardSize;
+      newCell.group = importedCellGroups[newCell.index];
+      newCell.operator = operatorByGroup[newCell.group];
+      newCell.result = resultByGroup[newCell.group];
+      newCell.value = 0;
+      newCell.candidates = [];
+      newCell.isLeader = false;
+      addCellEventListeners(newCell);
+      newRow.appendChild(newCell);
+      cells.push(newCell);
+    }
+  }
+  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup));
+  cells.forEach( thisCell => thisCell.impactedCells = cells.filter(c => (c.row == thisCell.row) != (c.col == thisCell.col)) );
+  updateCellBorders();
+  adjustLayout();
+
+  // Error checking on imported board
+
+  // Validate the imported board
+  const validationResult = validateBoard(seed.startTime);
+  if (validationResult != "success") {
+    returnToMainMenu("Imported board had multiple solutions.")
+  }
+  console.log("Import Complete of board with string",importedString,"\nVerified solution in",Date.now()-seed.startTime,"ms.");
+  cells.forEach(thisCell => {
+    if (isDebugMode) newCell.answer = newCell.value;
+    else thisCell.candidates = []; // Hide candidates
+    thisCell.value = 0; // Hide the cell values
+  });
+
+  states.undo = [];
+  saveUndoState();
+  updateCellDisplay();
+}
+
 //region Generate Board
 function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
-  
+  menuContainer.classList.add("hidden");
+  gameContainer.classList.remove("hidden");
   function failWithError(errorString) {
-    console.error(errorString);
+    returnToMainMenu(errorString);
     return { time:0, seed:seedOrBoardOptions };
   }
   // If seed is too large, the final digits don't parse correctly
-  if (seedOrBoardOptions > 10**14) failWithError("Seed too large. Must be less than 15 digits.");
+  if (seedOrBoardOptions > 10**14) return failWithError("Seed too large. Must be less than 15 digits.");
   // seedOrSize is either a full seed (5 to 14 digits), or an options code (1 to 4 digits)
   // If an option digit is 0, or invalid, or unspecified, it will use the previously valid choice for that option
   // If the option code is just 1 digit, it will specify board size, and other digits will be 0
@@ -131,7 +207,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   const newBoardOptions = ( seedOrBoardOptions == null ? currentBoardOptions : seedOrBoardOptions.toString().slice(-4).padStart(4,0).split('').map(Number) );
   // Check for invalid options, and set them back to 0
   if (!(newBoardOptions[2] in allOperatorsOptions)) newBoardOptions[2] = 0;
-  if (newBoardOptions[3] < 3) failWithError("Invalid board size: Must be between 3 and 9.");
+  if (newBoardOptions[3] < 3) return failWithError("Invalid board size: Must be between 3 and 9.");
   newBoardOptions[0] = 0; // [0] is group options (default 1) (currently not implemented)
   // 1 = Normal, 2 = Just Duos, 3 = No Solos, 4 = Huge Groups, 5 = Symmetric Groups
   newBoardOptions[1] = 0; // [1] is difficulty    (default 1) (currently not implemented)
@@ -153,51 +229,45 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   
   cells = []; // Clear all cell info
   boardContainer.innerHTML = '';
-
   const allNumsToGive = Array.from({ length: boardSize }, (_, i) => i + 1);
-  assignNumbers();
-  function assignNumbers() {
-    let numberAssignRetryCount = 0;
-    for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
-      const newRow = quickElement('div','row');
-      boardContainer.appendChild(newRow);
-      for (let j = 0; j < boardSize && numberAssignRetryCount < 1000; j++) {
-        const newCell = quickElement('div','cell');
-        newCell.row = i;
-        newCell.col = j;
-        newCell.index = j + i * boardSize;
-        newCell.operator = -1;
-        newCell.result = 0;
-        
-        // Assign the value of the cell (will be hidden after)
-        const numsToGive = allNumsToGive.filter(thisNum => !cells.some(cell => (cell.row==i || cell.col==j) && cell.value==thisNum));
-        if (numsToGive.length == 0) { // If there are no valid numbers to place, delete the row and try again
-          newRow.innerHTML = '';
-          while (j > 0) { // Remove all cells in the row
-            cells.pop()
-            j--;
-          }
-          j = -1;
-          numberAssignRetryCount++;
-          continue; // Restart the row from column 0
+  let numberAssignRetryCount = 0;
+  for (let i = 0; i < boardSize; i++) { // Create each cell in the grid, and assign numbers **************
+    const newRow = quickElement('div','row');
+    boardContainer.appendChild(newRow);
+    for (let j = 0; j < boardSize && numberAssignRetryCount < 1000; j++) {
+      const newCell = quickElement('div','cell');
+      newCell.row = i;
+      newCell.col = j;
+      newCell.index = j + i * boardSize;
+      newCell.operator = -1;
+      newCell.result = 0;
+      // Assign the value of the cell (will be hidden after)
+      const numsToGive = allNumsToGive.filter(thisNum => !cells.some(cell => (cell.row==i || cell.col==j) && cell.value==thisNum));
+      if (numsToGive.length == 0) { // If there are no valid numbers to place, delete the row and try again
+        newRow.innerHTML = '';
+        while (j > 0) { // Remove all cells in the row
+          cells.pop()
+          j--;
         }
-        newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
-        if (isDebugMode) newCell.answer = newCell.value;
-        newCell.group = null;
-        newCell.candidates = [...allNumsToGive];
-        newCell.isLeader = false;
-        newCell.addEventListener('click',     () => updateCellHighlight(newCell, false, true));
-        newCell.addEventListener('mouseover', () => updateCellHighlight(newCell, true));
-        newCell.addEventListener('mouseout',  () => updateCellHighlight(null, true));
-        newRow.appendChild(newCell);
-        cells.push(newCell);
+        j = -1;
+        numberAssignRetryCount++;
+        continue; // Restart the row from column 0
       }
+      newCell.value = numsToGive[Math.floor(getRandom() * numsToGive.length)];
+      if (isDebugMode) newCell.answer = newCell.value;
+      newCell.group = null;
+      newCell.candidates = [];
+      newCell.isLeader = false;
+      addCellEventListeners(newCell);
+      newRow.appendChild(newCell);
+      cells.push(newCell);
     }
-    logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.",
-      "\nCurrent time is",Date.now()-seed.startTime,"ms.",
-      "Cells after number placement:",cells);
   }
+  logToConsole("Finished assigning numbers after",numberAssignRetryCount,"attempts.",
+    "\nCurrent time is",Date.now()-seed.startTime,"ms.",
+    "Cells after number placement:",cells);
 
+  //region .      Groups
   let thisGroup = 100;
   const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
   initializeGroups(0.4,0.2);
@@ -274,7 +344,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   }
   function sequentializeGroups() { // Re-order the group numbers to start at 0, and not skip any numbers
     cells.forEach(thisCell => thisCell.group += 100);
-    thisGroup = 0;
+    let thisGroup = 0;
     cells.forEach(thisCell => {
       if (thisCell.group >= 100) {
         cells.filter(c => c.group == thisCell.group).forEach(c => c.group = thisGroup);
@@ -283,9 +353,8 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
     });
     groupList = [...Array(thisGroup).keys()];
   }
-  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup)); // Record the cells in each group
-  operatorsByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
-  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
+  
+  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup));
   logToConsole("Finished assigning groups. Current time is",Date.now()-seed.startTime,"ms.","\nCells by Group:",cellsByGroup);
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
@@ -310,14 +379,14 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
     }
   }
   
-  // Assign the operators to each group
+  //region .      Operators 
+  // Assign the operators to each group, randomly and based on size
   cells.forEach(thisCell => {
     if (thisCell.operator == -1) {
       const thisGroup = thisCell.group;
       const groupSize = cells.filter(c => c.group === thisGroup).length;
       if (groupSize == 1) {
         thisCell.operator = 0;
-        thisCell.candidates = [thisCell.value];
       } else {
         tryToAssignOperator();
         function tryToAssignOperator(forceAssignment = 0) {
@@ -353,13 +422,10 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   // Assemble cell candidates and list of impacted cells
   cells.forEach(thisCell => {
     thisCell.impactedCells = cells.filter(c => (c.row == thisCell.row) != (c.col == thisCell.col));
-    if (thisCell.operator != 0) {
-      thisCell.candidates = thisCell.candidates.filter(i => thisCell.impactedCells.every(c => c.value != i));
-      if (allOperatorsToGive.includes(5)) thisCell.operator = 5; // For a blind puzzle, set all operators to unknown
-      if (thisCell.operator == 2) // For multiply operators, candidates have to be divisible
-        thisCell.candidates = thisCell.candidates.filter(i => ~~(thisCell.result/i) == thisCell.result/i);
-    }
+    if (thisCell.operator == 0 && allOperatorsToGive.includes(5)) thisCell.operator = 5; // For a blind puzzle, set all operators to unknown
   });
+  operatorByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].operator);
+  resultByGroup = groupList.map(thisGroup => cellsByGroup[thisGroup][0].result);
   updateCellBorders();
   logToConsole("Finished assigning operators.",
     "\nCurrent time is",Date.now()-seed.startTime,"ms.",
@@ -376,8 +442,9 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   console.log("Finished puzzle generation of seed",seed.full,"with an individual time of",Date.now()-seed.startTime,"ms.",
     "\nIn total, generated",seed.retryCount+1,"puzzles with a total time of",Date.now()-seed.totalStartTime,"ms.");
   cells.forEach(thisCell => {
+    if (isDebugMode) newCell.answer = newCell.value;
+    else thisCell.candidates = []; // Hide candidates
     thisCell.value = 0; // Hide the cell values
-    if (!isDebugMode) thisCell.candidates = []; // Hide candidates
   });
   adjustLayout();
   states.undo = [];
@@ -392,13 +459,22 @@ function validateBoard() { // Validates the current board to ensure there is onl
   const allIndexes = [...Array(boardSize).keys()];
   const cellsByRow    = allIndexes.map(i => cells.filter(c => c.row == i));
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
+  cells.forEach(thisCell => {
+    if (thisCell.operator == 0) {
+      thisCell.candidates = [thisCell.value];
+    } else {
+      thisCell.candidates = allNumsToGive.filter(i => thisCell.impactedCells.every(c => c.value != i));
+      if (thisCell.operator == 2) // For multiply operators, candidates have to be divisible
+        thisCell.candidates = thisCell.candidates.filter(i => ~~(thisCell.result/i) == thisCell.result/i);
+    }
+  });
 
   let totalComboNodes = 0;
   combinationsByGroup = groupList.map(thisGroup => generateCombinations(thisGroup)); // Determine unique combinations for each group
   function generateCombinations(thisGroup) { // This function lists valid combos of numbers for cells in that group
     const theseCombos = [];
     const thisResult = resultByGroup[thisGroup];
-    if (operatorsByGroup[thisGroup] == 0) {
+    if (operatorByGroup[thisGroup] == 0) {
       theseCombos.push([thisResult]);
     } else {
       build();
@@ -412,7 +488,7 @@ function validateBoard() { // Validates the current board to ensure there is onl
         }
         return;
       }
-      if (operatorsByGroup[thisGroup] == 1 
+      if (operatorByGroup[thisGroup] == 1 
         && ( cellsByGroup[thisGroup].reduce((total, c) => total + (c.value||1), 0) > thisResult
         ||   cellsByGroup[thisGroup].reduce((total, c) => total + (c.value||boardSize), 0) < thisResult ) ) {
         return;
@@ -720,7 +796,7 @@ function getDailySeed(seedOffset = 7777) { // Get a reliable seed for the day
 //region Helper Functions
 function calcResultForGroup(thisGroup, forcedOperator = null) {
   const cellsInThisGroup = cellsByGroup[thisGroup];
-  const thisOperator = forcedOperator ?? operatorsByGroup[thisGroup];
+  const thisOperator = forcedOperator ?? operatorByGroup[thisGroup];
   if (thisOperator == 0) return cellsInThisGroup[0].value; // If alone, there is no operator
   if (thisOperator == 1) return cellsInThisGroup.reduce((total, c) => total + c.value, 0); // Add
   if (thisOperator == 2) return cellsInThisGroup.reduce((total, c) => total * c.value, 1); // Multiply
@@ -728,7 +804,7 @@ function calcResultForGroup(thisGroup, forcedOperator = null) {
   if (thisOperator == 4) return Math.max(cellsInThisGroup[0].value, cellsInThisGroup[1].value) / Math.min(cellsInThisGroup[0].value, cellsInThisGroup[1].value); // Divide
 }
 function isGroupResultCorrect(thisGroup) {
-  if (operatorsByGroup[thisGroup] == 5) { // For a blind operator, try all 4 operators
+  if (operatorByGroup[thisGroup] == 5) { // For a blind operator, try all 4 operators
     if (cellsByGroup[thisGroup].length > 2) { // For blind groups larger than 2, only try 2 operators
       return [1,2].some( thisOperator => calcResultForGroup(thisGroup,thisOperator) == resultByGroup[thisGroup] );
     } else {
@@ -736,6 +812,11 @@ function isGroupResultCorrect(thisGroup) {
     }
   }
   return ( calcResultForGroup(thisGroup) == resultByGroup[thisGroup] );
+}
+function addCellEventListeners(thisCell) {
+  thisCell.addEventListener('click',     () => updateCellHighlight(thisCell, false, true));
+  thisCell.addEventListener('mouseover', () => updateCellHighlight(thisCell, true));
+  thisCell.addEventListener('mouseout',  () => updateCellHighlight(null, true));
 }
 function quickElement(type, className, innerHTML = '') {
     const newElement = document.createElement(type);
@@ -876,41 +957,46 @@ function togglePencilMode() {
 
 //region Event Listeners
 document.addEventListener('keydown', (event) => {
-  [1,2,3,4,5,6,7,8,9].forEach(thisNum => {
-    if (event.key == thisNum && thisNum <= boardSize) {
-      tryToEnterNumber(thisNum);
+  if (!gameContainer.classList.contains("hidden")) {
+    [1,2,3,4,5,6,7,8,9].forEach(thisNum => {
+      if (event.key == thisNum && thisNum <= boardSize) {
+        tryToEnterNumber(thisNum);
+      }
+    });
+    if (['0','`','Escape','Delete'].includes(event.key)) {
+      tryToEnterNumber(0);
     }
-  });
-  if (['0','`','Escape','Delete'].includes(event.key)) {
-    tryToEnterNumber(0);
-  }
-  if (event.key == "c") {
-    togglePencilMode();
-  };
-  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
-    if (clickTarget) {
-      const thisIndex = clickTarget.index;
-      if (event.key == "ArrowUp" && thisIndex >= boardSize) {
-        updateCellHighlight(cells[thisIndex-boardSize]);
-      } else if (event.key == "ArrowDown" && thisIndex < boardSize*(boardSize-1)) {
-        updateCellHighlight(cells[thisIndex+boardSize]);
-      } else if (event.key == "ArrowLeft" && thisIndex%boardSize) {
-        updateCellHighlight(cells[thisIndex-1]);
-      } else if (event.key == "ArrowRight" && thisIndex%boardSize < boardSize-1) {
-        updateCellHighlight(cells[thisIndex+1]);
+    if (event.key == "c") {
+      togglePencilMode();
+    };
+    if (event.key == "m") {
+      returnToMainMenu();
+    };
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
+      if (clickTarget) {
+        const thisIndex = clickTarget.index;
+        if (event.key == "ArrowUp" && thisIndex >= boardSize) {
+          updateCellHighlight(cells[thisIndex-boardSize]);
+        } else if (event.key == "ArrowDown" && thisIndex < boardSize*(boardSize-1)) {
+          updateCellHighlight(cells[thisIndex+boardSize]);
+        } else if (event.key == "ArrowLeft" && thisIndex%boardSize) {
+          updateCellHighlight(cells[thisIndex-1]);
+        } else if (event.key == "ArrowRight" && thisIndex%boardSize < boardSize-1) {
+          updateCellHighlight(cells[thisIndex+1]);
+        }
       }
     }
+    if (event.key == 'Backspace') { // Undo the last action
+      if (states.undo.length > 1) {
+        const stateToRecover = states.undo[states.undo.length-2];
+        cells.forEach( (thisCell,thisIndex) => {
+          thisCell.value = stateToRecover.values[thisIndex];
+          thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
+        });
+        updateCellDisplay(states.undo.pop().clickTarget);
+      }
+    };
   }
-  if (event.key == 'Backspace') { // Undo the last action
-    if (states.undo.length > 1) {
-      const stateToRecover = states.undo[states.undo.length-2];
-      cells.forEach( (thisCell,thisIndex) => {
-        thisCell.value = stateToRecover.values[thisIndex];
-        thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
-      });
-      updateCellDisplay(states.undo.pop().clickTarget);
-    }
-  };
 });
 function tryToEnterNumber(thisNum) {
   if (clickTarget) {
