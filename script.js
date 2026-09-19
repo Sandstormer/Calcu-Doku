@@ -819,14 +819,16 @@ function addCellEventListeners(thisCell) {
     dragging = { isDragging:true, source:thisCell, target:null };
   });
   thisCell.addEventListener("mouseover", () => {
-    updateCellHighlight(thisCell, true);
     if (dragging.isDragging && (dragging.source != thisCell || dragging.target != null) ) dragging.target = thisCell;
+    updateCellHighlight(thisCell, true);
   });
   thisCell.addEventListener("mouseup", () => {
-    updateCellHighlight(thisCell, false, (dragging.source==thisCell && dragging.target==null) );
-    if (dragging.isDragging && dragging.target && dragging.target != dragging.source) {
+    dragging.isDragging = false;
+    if (dragging.target == null) { // Clicked and released on the same cell
+      updateCellHighlight(thisCell, false, (dragging.source==thisCell && dragging.target==null) );
+    } else {
       dragging.target.candidates = [...dragging.source.candidates];
-      updateCellDisplay();
+      updateCellDisplay(); // Also updates highlight
     }
     dragging = { isDragging:false, source:null, target:null };
   });
@@ -943,7 +945,7 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
     clickTarget = newClickTarget;
   }
   cells.forEach(thisCell => // Highlight the cell if it is selected
-    thisCell.style.backgroundColor = ( dragging.isDragging 
+    thisCell.style.backgroundColor = ( dragging.isDragging && dragging.target != null
       ? ( dragging.source == thisCell ? color.yellow : ( clickTarget == thisCell ? color.blue : color.cell ) )
       : ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.lightPurple ) : color.cell ) )
   );

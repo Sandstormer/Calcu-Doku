@@ -195,6 +195,7 @@ div {
   margin: var(--border-size) auto auto;
   border-radius: 0px 0px 8px 8px;
   padding: 0px 3px;
+  user-select: none;
   width: max-content;
 }
 .input-button {
@@ -208,6 +209,7 @@ div {
   align-items: center;
   justify-content: center;
   font-size: calc(0.8*var(--input-size));
+  user-select: none;
   cursor: pointer;
 }
 
@@ -223,6 +225,7 @@ div {
   width: max-content;
   max-width: calc(0.8*var(--board-size));
   gap: calc(0.5*var(--border-size));
+  user-select: none;
   cursor: pointer;
 }
 .pencil-button {
@@ -236,6 +239,7 @@ div {
   align-items: center;
   justify-content: center;
   font-size: var(--pencil-size);
+  user-select: none;
   pointer-events: none;
 }
 .pencil-text {
@@ -244,6 +248,7 @@ div {
   color: white;
   line-height: 100%;
   margin: 4px 2px -4px -1px;
+  user-select: none;
   pointer-events: none;
 }
 
