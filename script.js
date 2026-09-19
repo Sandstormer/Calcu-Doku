@@ -274,6 +274,31 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   initializeGroups(1,0.3);
   const soloMergeChance = ( allOperatorsToGive.includes(0) ? 0.6 + boardSize/30 : 1 );
   finalizeGroups(soloMergeChance);
+
+  // inQuadrant = cells.filter(c => c.row < boardSize/2 && c.col < boardSize/2);
+  // inQuadrant.forEach(thisCell => {
+  //   if (thisCell.row < boardSize-1) {
+  //     const partnerCell = cells[thisCell.index+boardSize];
+  //     if (partnerCell.group == thisCell.group && !inQuadrant.includes(partnerCell)) {
+  //       const reflectedCell = getRotatedCell(partnerCell);
+  //       if (reflectedCell.group != partnerCell.group && cells.filter(c => c.group == reflectedCell.group).length < 3) {
+  //         inQuadrant[inQuadrant.findIndex(c => c==reflectedCell)] = partnerCell;
+  //         console.error(inQuadrant, thisCell, partnerCell, reflectedCell);
+  //       }
+  //     }
+  //   }
+  // });
+  // inQuadrant.forEach(thisCell => {
+  //   increment = ( thisCell.row == boardSize/2-1 && thisCell.col == boardSize/2-1 && inQuadrant.filter(c => c.group == thisCell.group).length == 1 ? 0 : 100 );
+  //   [1,2,3].forEach(i => getRotatedCell(thisCell,i).group = thisCell.group + increment*i);
+  // });
+  // function getRotatedCell(thisCell, rotations = 1) {
+  //   rotations = (rotations+4)%4;
+  //   const rotatedCell = cells[ boardSize-1-thisCell.row + thisCell.col * boardSize ];
+  //   return ( rotations > 1 ? getRotatedCell(rotatedCell,rotations-1) : ( rotations == 0 ? thisCell : rotatedCell ) );
+  // }
+  // finalizeGroups(0);
+
   sequentializeGroups();
   function initializeGroups(assignChance = 1, mergeChance = 0) { // Cluster the cells into groups **************
     cells.forEach((thisCell, thisIndex) => {
