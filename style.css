@@ -27,7 +27,7 @@ div {
   width: var(--board-size);
   background-color: #E0E0E0;
   border: 6px solid black;
-  outline: var(--border-size) solid #252129;
+  outline: var(--border-size) solid #29262D;
   overflow-x: hidden;
   margin: auto;
   padding: 2px;
@@ -69,8 +69,7 @@ div {
   width: var(--board-size);
   background-color: #E0E0E0;
   border: 6px solid black;
-  /* outline: var(--border-size) solid #252129; */
-  outline: var(--border-size) solid #29252D;
+  outline: var(--border-size) solid #29262D;
   margin-top: var(--border-size);
   border-radius: 1px;
   gap: 6px;
@@ -187,24 +186,23 @@ div {
 
 #top-container {
   display: flex;
+  width: max-content;
   background-color: #171619;
+  border-radius: 8px 8px 0px 0px;
   margin: 0px auto;
   padding: 12px;
-  justify-content: center;
-  width: max-content;
   gap: 12px;
 }
 .top-button {
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
   background-color: #0E0B11;
-  border: 3px solid #29252D;
+  border: 3px solid #45414C;
+  border-radius: 4px;
+  padding: 6px 12px;
   font-size: var(--pencil-size);
-  font-weight: bold;
   user-select: none;
+  font-weight: bold;
   color: #EEEEEE;
+  cursor: pointer;
 }
 .top-button:hover {
   border: 3px solid rgb(140, 130, 240);
@@ -215,27 +213,33 @@ div {
   flex-direction: row;
   position: relative;
   z-index: 200;
-  background-color: #302B35;
-  background-color: #171619;
-  margin: var(--border-size) auto auto;
-  border-radius: 0px 0px 8px 8px;
-  padding: 0px 3px;
-  user-select: none;
   width: max-content;
+  background-color: #171619;
+  border-radius: 0px 0px 8px 8px;
+  margin: var(--border-size) auto auto;
+  padding: 12px;
+  gap: 12px;
+  user-select: none;
 }
-.input-button {
+.input-button, .input-candidate-button {
   display: flex;
-  border: 4px solid black;
+  background-color: #0E0B11;
+  border: 4px solid #45414C;
   border-radius: 1000px;
-  background-color: #EEEEEE;
   height: var(--input-size);
-  margin: 6px 3px;
   aspect-ratio: 1/1;
   align-items: center;
   justify-content: center;
   font-size: calc(0.8*var(--input-size));
+  color: #EEEEEE;
   user-select: none;
   cursor: pointer;
+}
+.input-button:hover {
+  border: 4px solid rgb(140, 130, 240);
+}
+.input-candidate-button:hover {
+  border: 4px solid rgb(240, 230, 140);
 }
 
 #pencil-container {
@@ -243,7 +247,6 @@ div {
   flex-direction: row;
   position: relative;
   z-index: 100;
-  background-color: #302B35;
   background-color: #171619;
   margin: auto;
   border-radius: 0px 0px 8px 8px;
@@ -258,7 +261,7 @@ div {
   display: flex;
   border: 4px solid black;
   border-radius: 2px;
-  background-color: rgb(238,238,238);
+  background-color: #EEEEEE;
   min-height: var(--pencil-size);
   max-height: var(--pencil-size);
   aspect-ratio: 1/1;
@@ -271,7 +274,7 @@ div {
 .pencil-text {
   font-size: var(--pencil-size);
   font-weight: bold;
-  color: white;
+  color: #EEEEEE;
   margin: 4px 2px -4px -1px;
   user-select: none;
   pointer-events: none;

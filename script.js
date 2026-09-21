@@ -58,7 +58,7 @@ const menuBoardOptions = [
   ]
 ]
 const color = {
-  black:  'rgb(  0,  0,  0)', grey: 'rgb(160,160,160)',  cell:  'rgb(238,238,238)',
+  black:  'rgb(  0,  0,  0)', grey: 'rgb( 69, 65, 76)',  cell:  'rgb(238,238,238)', button:'rgb(14,11,17)',
   green:  'rgb(  0,150,  0)', red:  'rgb(220, 30,  0)', yellow: 'rgb(240,230,140)',
   purple: 'rgb(140, 130, 240)', lightPurple:'rgb(173, 165, 255)', blue: 'rgb(130, 200, 250)',
 };
@@ -901,7 +901,6 @@ function adjustLayout() {
     inputButtons = [];
     [...Array(boardSize+1).keys()].forEach( thisNum => {
       const newButton = quickElement("div","input-button",thisNum || "C");
-      newButton.style.backgroundColor = color.cell;
       newButton.addEventListener("click", () => tryToEnterNumber(thisNum));
       inputButtons.push(newButton);
       inputContainer.appendChild(newButton);
@@ -976,7 +975,8 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
       : ( clickTarget == thisCell ? ( isPencilMode ? color.yellow : color.lightPurple ) : color.cell ) )
   );
   inputButtons.forEach( (newButton,thisNum) => { // Set the color of each number input button
-    newButton.style.backgroundColor = ( thisNum == 0 ? color.grey : // "Clear" button is always grey
+    newButton.className = ( isPencilMode ? "input-candidate-button" : "input-button" );
+    newButton.style.color = ( thisNum == 0 ? color.grey : // "Clear" button is always grey
       ( clickTarget == null ? color.cell : // No color if not selected
         ( clickTarget.value ? ( clickTarget.value == thisNum ? color.lightPurple : color.grey ) : // Purple if value is selected
           ( clickTarget.candidates.includes(thisNum) ? color.yellow : // Yellow if in candidate list
