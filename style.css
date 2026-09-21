@@ -1,9 +1,7 @@
 /* style.css */
 body {
   background-color: #0E0C0F;
-  color: #000000;
   font-family: Arial, Helvetica, sans-serif, sans-serif;
-  font-size: 16px;
   margin: 0px;
   padding: 0px;
   width: 100vw;
@@ -71,7 +69,8 @@ div {
   width: var(--board-size);
   background-color: #E0E0E0;
   border: 6px solid black;
-  outline: var(--border-size) solid #252129;
+  /* outline: var(--border-size) solid #252129; */
+  outline: var(--border-size) solid #29252D;
   margin-top: var(--border-size);
   border-radius: 1px;
   gap: 6px;
@@ -186,12 +185,38 @@ div {
   100% { background-color: #EEEEEE; }
 }
 
+#top-container {
+  display: flex;
+  background-color: #171619;
+  margin: 0px auto;
+  padding: 12px;
+  justify-content: center;
+  width: max-content;
+  gap: 12px;
+}
+.top-button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  background-color: #0E0B11;
+  border: 3px solid #29252D;
+  font-size: var(--pencil-size);
+  font-weight: bold;
+  user-select: none;
+  color: #EEEEEE;
+}
+.top-button:hover {
+  border: 3px solid rgb(140, 130, 240);
+}
+
 #input-container {
   display: flex;
   flex-direction: row;
   position: relative;
   z-index: 200;
   background-color: #302B35;
+  background-color: #171619;
   margin: var(--border-size) auto auto;
   border-radius: 0px 0px 8px 8px;
   padding: 0px 3px;
@@ -219,6 +244,7 @@ div {
   position: relative;
   z-index: 100;
   background-color: #302B35;
+  background-color: #171619;
   margin: auto;
   border-radius: 0px 0px 8px 8px;
   padding: calc(0.5*var(--border-size));
@@ -246,7 +272,6 @@ div {
   font-size: var(--pencil-size);
   font-weight: bold;
   color: white;
-  line-height: 100%;
   margin: 4px 2px -4px -1px;
   user-select: none;
   pointer-events: none;

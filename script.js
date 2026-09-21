@@ -1,5 +1,6 @@
 const menuContainer   = document.getElementById("menu-container");
 const gameContainer   = document.getElementById("game-container");
+const topContainer    = document.getElementById("top-container");
 const boardContainer  = document.getElementById("board-container");
 const inputContainer  = document.getElementById("input-container");
 const pencilContainer = document.getElementById("pencil-container");
@@ -1029,14 +1030,7 @@ document.addEventListener('keydown', (event) => {
       }
     }
     if (event.key == 'Backspace') { // Undo the last action
-      if (states.undo.length > 1) {
-        const stateToRecover = states.undo[states.undo.length-2];
-        cells.forEach( (thisCell,thisIndex) => {
-          thisCell.value = stateToRecover.values[thisIndex];
-          thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
-        });
-        updateCellDisplay(states.undo.pop().clickTarget);
-      }
+      loadUndoState();
     };
   }
 });
@@ -1074,6 +1068,26 @@ function saveUndoState() {
     candidates: cells.map(c => c.candidates),
     clickTarget: clickTarget,
   });
+}
+function loadUndoState() {
+  if (states.undo.length > 1) {
+    const stateToRecover = states.undo[states.undo.length-2];
+    cells.forEach( (thisCell,thisIndex) => {
+      thisCell.value = stateToRecover.values[thisIndex];
+      thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
+    });
+    updateCellDisplay(states.undo.pop().clickTarget);
+  }
+}
+function resetBoardState() {
+  if (cells.some( thisCell => thisCell.value || thisCell.candidates.length )) {
+    cells.forEach( thisCell => {
+      thisCell.value = 0;
+      thisCell.candidates = [];
+    });
+    updateCellDisplay(null);
+    saveUndoState();
+  }
 }
 pencilContainer.addEventListener("click",     () => togglePencilMode());
 pencilContainer.addEventListener("mouseover", () => updatePencilDisplay(true));
