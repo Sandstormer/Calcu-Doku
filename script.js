@@ -976,11 +976,14 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
   );
   inputButtons.forEach( (newButton,thisNum) => { // Set the color of each number input button
     newButton.className = ( isPencilMode ? "input-candidate-button" : "input-button" );
-    newButton.style.color = ( thisNum == 0 ? color.grey : // "Clear" button is always grey
-      ( clickTarget == null ? color.cell : // No color if not selected
-        ( clickTarget.value ? ( clickTarget.value == thisNum ? color.lightPurple : color.grey ) : // Purple if value is selected
-          ( clickTarget.candidates.includes(thisNum) ? color.yellow : // Yellow if in candidate list
-            ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell ) // Grey if duplicate in line
+    newButton.style.color = ( thisNum == 0 ? 
+      ( // For "Clear" button, show grey if there is nothing to clear
+        isPencilMode ? ( clickTarget?.candidates.length ? color.cell : color.grey ) : ( clickTarget?.value ? color.cell : color.grey )
+      ) : ( // For number input buttons
+        clickTarget == null ? color.cell : ( // White if no cell is selected
+          clickTarget.value ? ( clickTarget.value == thisNum ? color.lightPurple : color.grey ) : ( // Purple if value is selected
+            clickTarget.candidates.includes(thisNum) ? color.yellow : // Yellow if in candidate list
+              ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell ) // Grey if duplicate in line
           )
         )
       )
@@ -1038,7 +1041,7 @@ function tryToEnterNumber(thisNum) {
   if (clickTarget) {
     if (isPencilMode) { // Add to the candidate list
       if (thisNum) {
-        if (clickTarget.candidates.includes(thisNum)) {
+        if (clickTarget.candidates.includes(thisNum) || clickTarget.impactedCells.some(c => c.value == thisNum)) {
           clickTarget.candidates = clickTarget.candidates.filter(i => i != thisNum);
         } else {
           clickTarget.candidates = [thisNum,...clickTarget.candidates].sort();
