@@ -48,32 +48,63 @@ const allOperatorsOptions = {
 }
 const menuBoardOptions = [
   [
-    [13,"3×3"], [14,"4×4"], [15,"5×5"]
+    [13,"3×3","Very Easy"], [14,"4×4","Easy"], [15,"5×5","Easy"]
   ],
   [
-    [16,"6×6"], [17,"7×7"], [18,"8×8"]
+    [76,"6×6 Mult","Medium"], [16,"6×6","Medium"], [66,"6×6 Plus","Hard"]
   ],
   [
-    [19,"9×9"], [66,"Mono +"], [76,"Mono ×"]
+    [17,"7×7","Hard"], [18,"8×8","Very Hard"], [19,"9×9","Very Hard"]  
   ]
-]
+];
 const color = {
   black:  'rgb(  0,  0,  0)', grey: 'rgb( 69, 65, 76)',  cell:  'rgb(238,238,238)', button:'rgb(14,11,17)',
   green:  'rgb(  0,150,  0)', red:  'rgb(220, 30,  0)', yellow: 'rgb(240,230,140)',
   purple: 'rgb(140, 130, 240)', lightPurple:'rgb(173, 165, 255)', blue: 'rgb(130, 200, 250)',
+  "Very Easy": 'rgb(130,210,250)',
+  "Easy":      'rgb(160,250,160)',
+  "Medium":    'rgb(240,230,140)',
+  "Hard":      'rgb(240,170,100)',
+  "Very Hard": 'rgb(250,110,110)',
 };
 
 //region Main Menu
 adjustLayout(); // Initial adjustment of layout
-menuBoardOptions.forEach( row => { // Create the main menu buttons
+const menuTitle = quickElement('div','menu-title');
+[..."CalcuDoku Puzzles"].forEach( (thisChar,animDelay) => {
+  const charElement = quickElement("span","", thisChar == " " ? "&nbsp" : thisChar );
+  charElement.style.setProperty("--anim-delay", animDelay);
+  menuTitle.appendChild(charElement);
+});
+menuContainer.appendChild(menuTitle);
+const menuButtonContainer = quickElement('div','menu-button-container');
+menuBoardOptions.forEach( (buttonsInRow,row) => { // Create the main menu buttons
   const newRow = quickElement('div','menu-row');
-  row.forEach( boardOptions => {
-    const newButton = quickElement('div','menu-button',boardOptions[1]);
-    newButton.addEventListener('click', () => generateAndValidateBoard(getDailySeed(boardOptions[0])));
+  buttonsInRow.forEach( (buttonOptions,i) => {
+    const newButton = quickElement('div','menu-button');
+    newButton.style.setProperty("--anim-delay", row + i);
+    const buttonCells = quickElement('div','menu-button-cell-container');
+    const newBoardSize = buttonOptions[0]%10;
+    for (let row = 0; row < newBoardSize; row++) {
+      const newRow = quickElement('div','menu-button-cell-row');
+      for (let col = 0; col < newBoardSize; col++) {
+        const newCell = quickElement('div','menu-button-cell');
+        newCell.style.setProperty("--anim-delay", (row + col)/newBoardSize);
+        newRow.appendChild(newCell);
+      }
+      buttonCells.appendChild(newRow);
+    }
+    const buttonTitle = quickElement('div','menu-button-overlay',`
+      <span class="menu-button-title ${ isMobile ? "thin-shadow" : "thick-shadow" }">${buttonOptions[1]}</span>
+      <span class="${ isMobile ? "thin-shadow" : "thick-shadow" }" style="color:${color[buttonOptions[2]]};">${buttonOptions[2]}</span>
+    `);
+    newButton.append(buttonCells,buttonTitle);
+    newButton.addEventListener('click', () => generateAndValidateBoard(getDailySeed(buttonOptions[0])));
     newRow.appendChild(newButton);
   });
-  menuContainer.appendChild(newRow);
+  menuButtonContainer.appendChild(newRow);
 });
+menuContainer.appendChild(menuButtonContainer);
 function returnToMainMenu(errorString = null) {
   if (errorString) console.error(errorString);
   menuContainer.classList.remove("hidden");
@@ -186,6 +217,7 @@ function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") 
     thisCell.value = 0; // Hide the cell values
   });
 
+  clickTarget = null;
   states.undo = [];
   saveUndoState();
   updateCellDisplay();
@@ -209,13 +241,14 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   // Check for invalid options, and set them back to 0
   if (!(newBoardOptions[2] in allOperatorsOptions)) newBoardOptions[2] = 0;
   if (newBoardOptions[3] < 3) return failWithError("Invalid board size: Must be between 3 and 9.");
-  newBoardOptions[0] = 0; // [0] is group options (default 1) (currently not implemented)
+  newBoardOptions[0] = 0; // [0] is difficulty    (default 1) (currently not implemented)
+  // 1 = Any Difficulty (Random), 2 = Easiest, 3 = Much Easier, 4 = Easier, 5 = Moderate, 6 = Harder, 7 = Much Harder, 8 = Hardest
+  newBoardOptions[1] = 0; // [1] is group options (default 1) (currently not implemented)
   // 1 = Normal, 2 = Just Duos, 3 = No Solos, 4 = Huge Groups, 5 = Symmetric Groups
-  newBoardOptions[1] = 0; // [1] is difficulty    (default 1) (currently not implemented)
   // For all non-zero options, set those as the current board options
   newBoardOptions.forEach((thisNum,i) => { if (thisNum) currentBoardOptions[i] = thisNum; });
-  const allOperatorsToGive = allOperatorsOptions[currentBoardOptions[2]]; // Option [2] is operators (default 1)
-  boardSize = currentBoardOptions[3]; // Option [3] is board size (must be between 3 and 9)
+  const allOperatorsToGive = allOperatorsOptions[currentBoardOptions[2]]; // Second last digit is operator options (default 1)
+  boardSize = currentBoardOptions[3]; // Final digit is board size (must be between 3 and 9)
 
   // If a full seed is specified, use that, otherwise add the suffix to the rolling seed
   seed.true = ( seedOrBoardOptions > 9999 ? (~~(seedOrBoardOptions/10000))>>>0 : rollingSeed ); // Portion of seed used for RNG
@@ -258,7 +291,6 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
       if (isDebugMode) newCell.answer = newCell.value;
       newCell.group = null;
       newCell.candidates = [];
-      newCell.isLeader = false;
       addCellEventListeners(newCell);
       newRow.appendChild(newCell);
       cells.push(newCell);
@@ -474,6 +506,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   });
   adjustLayout();
   states.undo = [];
+  clickTarget = null;
   saveUndoState();
   updateCellDisplay();
   return { time:Date.now()-seed.startTime, seed:seed.full }; // Return generation time and seed
@@ -852,8 +885,11 @@ function addCellEventListeners(thisCell) {
     dragging.isDragging = false;
     if (dragging.target == null) { // Clicked and released on the same cell
       updateCellHighlight(thisCell, false, (dragging.source==thisCell && dragging.target==null) );
-    } else {
-      dragging.target.candidates = [...dragging.source.candidates];
+    } else { // Drag and drop candidates to target cell
+      dragging.target.candidates = [...dragging.source.candidates.filter( i => 
+        dragging.target.impactedCells.every( c => c.value != i ) // Remove invalid candidates
+      )];
+      saveUndoState();
       updateCellDisplay(); // Also updates highlight
     }
     dragging = { isDragging:false, source:null, target:null };
@@ -981,7 +1017,7 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
         isPencilMode ? ( clickTarget?.candidates.length ? color.cell : color.grey ) : ( clickTarget?.value ? color.cell : color.grey )
       ) : ( // For number input buttons
         clickTarget == null ? color.cell : ( // White if no cell is selected
-          clickTarget.value ? ( clickTarget.value == thisNum ? color.lightPurple : color.grey ) : ( // Purple if value is selected
+          clickTarget.value ? ( clickTarget.value == thisNum ? color.purple : color.grey ) : ( // Purple if value is selected
             clickTarget.candidates.includes(thisNum) ? color.yellow : // Yellow if in candidate list
               ( clickTarget.impactedCells.some(c => c.value == thisNum) ? color.grey : color.cell ) // Grey if duplicate in line
           )

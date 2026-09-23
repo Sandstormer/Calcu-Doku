@@ -5,7 +5,7 @@ body {
   margin: 0px;
   padding: 0px;
   width: 100vw;
-  min-height: calc(100vh - 20px);
+  min-height: 100dvh;
   overflow-x: hidden;
   display: flex;
 }
@@ -16,22 +16,44 @@ div {
   display: none !important;
 }
 
+/* Main Menu - Including title and puzzle selector buttons */
 #menu-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  height: max-content;
+  margin: auto;
+  overflow-x: hidden;
+}
+.menu-title {
+  display: inline-block;
+  font-size: calc(var(--input-size) - 10px);
+  font-weight: bold;
+  color: #E0E0E0;
+}
+.menu-title > span {
+  display: inline-block;
+  will-change: transform;
+  animation: titleColorChange 1.5s ease-out both;
+  animation-delay: calc(var(--anim-delay) * 0.04s);
+}
+@keyframes titleColorChange {
+  0%   { transform: translateY(0); opacity: 0%; }
+  0%   { color: rgb(255, 255, 255); }
+  10%  { transform: translateY(calc(0px - var(--pencil-size) * 0.4)); opacity: 100%; }
+  50%  { color: rgb(140, 130, 240); }
+  50%  { transform: translateY(0); opacity: 100%; }
+  100% { color: rgb(255, 255, 255); }
+}
+.menu-button-container {
   position: relative;
-  z-index: 300;
-  height: var(--board-size);
-  width: var(--board-size);
-  background-color: #E0E0E0;
-  border: 6px solid black;
-  outline: var(--border-size) solid #29262D;
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--board-size) + var(--border-size));
+  width: calc(var(--board-size) + var(--border-size));
   overflow-x: hidden;
   margin: auto;
-  padding: 2px;
-  border-radius: 1px;
 }
 .menu-row {
   display: flex;
@@ -39,20 +61,109 @@ div {
   flex: 1;
 }
 .menu-button {
+  position: relative;
   display: flex;
-  border: 6px solid black;
+  border: 4px solid #EEEEEE;
   border-radius: 4px;
-  margin: 2px;
-  background-color: #EEEEEE;
+  margin: 6px;
+  background-color: black;
   min-height: 50px;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1/1;
-  font-size: calc(0.06 * var(--board-size));
+  font-size: calc(0.03 * var(--board-size));
   font-weight: bold;
+  overflow: hidden;
   cursor: pointer;
+  animation: menuButtonIntro 1s ease-out both;
+  animation-delay: calc(var(--anim-delay) * 0.1s);
+  will-change: transform;
+}
+@keyframes menuButtonIntro {
+  0%    { opacity: 0%;   }
+  100%  { opacity: 100%; }
+}
+.menu-button:hover {
+  border-color: rgb(140, 130, 240);
+}
+.menu-button-cell-container {
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--border-size) * 0.3);
+  gap: calc(var(--border-size) * 0.3);
+  width: calc(100% - var(--border-size) * 0.6);
+  height: calc(100% - var(--border-size) * 0.6);
+  border-radius: 17px;
+}
+.menu-button-cell-row {
+  display: flex;
+  flex: 1;
+  gap: calc(var(--border-size) * 0.3);
+}
+.menu-button-cell {
+  display: flex;
+  flex: 1;
+  position: relative;
+  border-radius: 2px;
+  background-color: #29262D;
+  aspect-ratio: 1/1;
+  user-select: none;
+}
+.menu-button:hover .menu-button-cell {
+  animation: menuCellColorChange 1.5s ease-in-out infinite;
+  animation-delay: calc(var(--anim-delay) * 0.5s); /* Delay each cell */
+}
+@keyframes menuCellColorChange {
+  0% { }
+  50% { background-color: rgb(140, 130, 240); }
+  100% { }
+}
+.menu-button-title {
+  font-size: calc(0.06 * var(--board-size));
+}
+.menu-button:hover .menu-button-title {
+  animation: buttonColorChange 1.5s ease-in-out infinite;
+}
+@keyframes buttonColorChange {
+  0%    { color: rgb(140, 130, 240); }
+  50%   { color: rgb(255, 255, 255); }
+  100%  { color: rgb(140, 130, 240); }
+}
+.menu-button-overlay {
+  position: absolute;
+  background:
+    linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0), rgba(0,0,0,0.6)),
+    url("./images/glass.png") center / cover no-repeat;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  font-weight: bold;
+  color: white;
+  transition: transform 0.25s ease-in-out;
+  animation: menuOverlayIntro 0.3s ease-out backwards;
+  animation-delay: calc(var(--anim-delay) * 0.1s);
+  will-change: transform;
+}
+@keyframes menuOverlayIntro {
+  0%   { transform: scale(1.3); }
+  100%  { transform: scale(1); }
+}
+.menu-button:hover .menu-button-overlay {
+  transform: scale(1.3);
+}
+.menu-button-overlay > span {
+  transition: transform 0.25s ease-in-out;
+}
+.menu-button:hover .menu-button-overlay > span {
+  transform: scale(0.85);
 }
 
+/* Game View - including game board, cells, and all input buttons */
 #game-container {
   padding: var(--border-size);
   overflow-x: hidden;
@@ -171,14 +282,14 @@ div {
 }
 @keyframes jumpUp {
   0%   { transform: translateY(0); opacity: 0%; }
-  20%  { transform: translateY(-30px); opacity: 100%; }
+  20%  { transform: translateY(calc(0px - var(--pencil-size))); opacity: 100%; }
   100% { transform: translateY(0); opacity: 100%; }
 }
 .completion-animation {
-  animation: colorChange 2s ease-in-out;
+  animation: completionColorChange 2s ease-in-out;
   animation-delay: calc(var(--anim-delay) * 0.8s); /* Delay each cell */
 }
-@keyframes colorChange {
+@keyframes completionColorChange {
   0% { background-color: #EEEEEE; }
   50% { background-color: rgb(140, 130, 240); }
   100% { background-color: #EEEEEE; }
