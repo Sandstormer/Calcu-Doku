@@ -48,13 +48,13 @@ const allOperatorsOptions = {
 }
 const menuBoardOptions = [
   [
-    [13,"3×3","Very Easy"], [14,"4×4","Easy"], [15,"5×5","Easy"]
+    [1113,"3×3","Very Easy"], [1114,"4×4","Easy"], [1115,"5×5","Easy"]
   ],
   [
-    [76,"6×6 Mult","Medium"], [16,"6×6","Medium"], [66,"6×6 Plus","Hard"]
+    [1176,"6×6 Mult","Medium"], [1116,"6×6","Medium"], [1166,"6×6 Plus","Hard"]
   ],
   [
-    [17,"7×7","Hard"], [18,"8×8","Very Hard"], [19,"9×9","Very Hard"]  
+    [1117,"7×7","Hard"], [1118,"8×8","Very Hard"], [1119,"9×9","Very Hard"]  
   ]
 ];
 const color = {
@@ -258,6 +258,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   seed.totalStartTime = ( isRetry ? seed.totalStartTime : Date.now() );
   seed.retryCount = ( isRetry ? seed.retryCount+1 : 0 );
   const getRandom = initializePRNG( seedOrBoardOptions > 9999 ? seed.true : null );
+  for (let i = 0; i < currentBoardOptions.join(''); i++) getRandom(); // Advance the seed to prevent similar boards with different options
   logBlankLine();
   logToConsole("Start of puzzle generation with seed",seed.full);
   
