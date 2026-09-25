@@ -28,7 +28,7 @@ div {
 }
 .menu-title {
   display: inline-block;
-  font-size: calc(var(--input-size) - 10px);
+  font-size: calc(var(--pencil-size) * 2);
   font-weight: bold;
   color: #E0E0E0;
 }
@@ -50,8 +50,8 @@ div {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: calc(var(--board-size) + var(--border-size));
-  width: calc(var(--board-size) + var(--border-size));
+  height: calc(var(--board-size) + 2 * var(--border-size));
+  width: calc(var(--board-size) + 2 * var(--border-size));
   overflow-x: hidden;
   margin: auto;
 }
@@ -328,8 +328,9 @@ div {
   background-color: #171619;
   border-radius: 0px 0px 8px 8px;
   margin: var(--border-size) auto auto;
-  padding: 12px;
-  gap: 12px;
+  gap: calc(4px + 0.5*var(--border-size));
+  padding: 11px;
+  max-width: calc(0.95*var(--board-size));
   user-select: none;
 }
 .input-button, .input-candidate-button {
@@ -342,7 +343,6 @@ div {
   align-items: center;
   justify-content: center;
   font-size: calc(0.8*var(--input-size));
-  color: #EEEEEE;
   user-select: none;
   cursor: pointer;
 }
@@ -354,31 +354,44 @@ div {
 }
 
 #pencil-container {
-  display: flex;
-  flex-direction: row;
   position: relative;
   z-index: 100;
   background-color: #171619;
   margin: auto;
   border-radius: 0px 0px 8px 8px;
-  padding: calc(0.5*var(--border-size));
-  width: max-content;
-  max-width: calc(0.8*var(--board-size));
   gap: calc(0.5*var(--border-size));
+  padding: 12px;
+  padding-top: 0px;
+  width: max-content;
   user-select: none;
   cursor: pointer;
 }
 .pencil-button {
   display: flex;
-  border: 4px solid black;
+  align-items: center;
+  justify-content: center;
+  background-color: #0E0B11;
+  border: 3px solid #45414C;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: var(--pencil-size);
+  user-select: none;
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: none;
+}
+.pencil-box {
+  display: flex;
+  border: 2px solid black;
   border-radius: 2px;
   background-color: #EEEEEE;
-  min-height: var(--pencil-size);
-  max-height: var(--pencil-size);
+  min-height: calc(0.8 * var(--pencil-size));
+  max-height: calc(0.8 * var(--pencil-size));
   aspect-ratio: 1/1;
   align-items: center;
   justify-content: center;
-  font-size: var(--pencil-size);
+  font-size: calc(0.8 * var(--pencil-size));
   user-select: none;
   pointer-events: none;
 }
@@ -386,7 +399,7 @@ div {
   font-size: var(--pencil-size);
   font-weight: bold;
   color: #EEEEEE;
-  margin: 4px 2px -4px -1px;
+  margin: 0px 2px 0px 7px;
   user-select: none;
   pointer-events: none;
 }

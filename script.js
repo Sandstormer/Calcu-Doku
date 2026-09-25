@@ -1036,9 +1036,10 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
   updatePencilDisplay();
 }
 function updatePencilDisplay(isHover = false) {
-  pencilContainer.innerHTML = 
-    `<div class="pencil-button">${isPencilMode ? "✔" : ""}</div>
-    <div class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.lightPurple : color.cell )};">Pencil Mode</div>`;
+  pencilContainer.innerHTML = `<div class="pencil-button">
+    <span class="pencil-box">${isPencilMode ? "✔" : ""}</span>
+    <span class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.lightPurple : color.cell )};">Pencil Mode</span>
+  </div>`;
 }
 function togglePencilMode() {
   isPencilMode = !isPencilMode;
