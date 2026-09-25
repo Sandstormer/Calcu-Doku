@@ -35,15 +35,15 @@ let cellDimensions = 100; // Pixel size of each cell
 const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
 const allOperatorsOptions = {
   // key = third digit in board options code ( i.e. ##1# )
-  // value = indexes of available operators ( 0 = '', 1 = +, 2 = ×, 3 = −, 4 = ÷, 5 = ? )
-  1: [0,1,2,3,4], // Default
-  2: [1,2,3,4], // No Solos
-  3: [0,1,3], // Plus Minus
-  4: [0,1,2], // Plus Mult
-  5: [0,2,4], // Mult Divide
-  6: [0,1], // Plus
-  7: [0,2], // Mult
-  8: [0,1,2,3,4,5], // Blind
+  // value = indexes of available operators ( 1 = +, 2 = ×, 3 = −, 4 = ÷, 5 = ? )
+  1: [1,2,3,4], // Default
+  2: [1,3], // Plus Minus
+  3: [1,2], // Plus Mult
+  4: [2,4], // Mult Divide
+  5: [1,2,3,4,5], // Blind
+  6: [1], // Plus
+  7: [2], // Mult
+  // 8: [], // Reserved (currently not implemented)
   // 9: [], // Reserved (currently not implemented)
 }
 const menuBoardOptions = [
@@ -207,10 +207,10 @@ function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") 
 
   // Validate the imported board
   const validationResult = validateBoard(seed.startTime);
-  if (validationResult != "success") {
-    returnToMainMenu("Imported board had multiple solutions.")
+  if (validationResult != "success") { // If there were no solutions or multiple solutions
+    returnToMainMenu(`Error with imported board: ${validationResult}`);
   }
-  console.log("Import Complete of board with string",importedString,"\nVerified solution in",Date.now()-seed.startTime,"ms.");
+  console.log("Finished import of board with string",importedString,"\nVerified solution in",Date.now()-seed.startTime,"ms.");
   cells.forEach(thisCell => {
     if (isDebugMode) newCell.answer = newCell.value;
     else thisCell.candidates = []; // Hide candidates
@@ -243,10 +243,10 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   if (newBoardOptions[3] < 3) return failWithError("Invalid board size: Must be between 3 and 9.");
   newBoardOptions[0] = 0; // [0] is difficulty    (default 1) (currently not implemented)
   // 1 = Any Difficulty (Random), 2 = Easiest, 3 = Much Easier, 4 = Easier, 5 = Moderate, 6 = Harder, 7 = Much Harder, 8 = Hardest
-  newBoardOptions[1] = 0; // [1] is group options (default 1) (currently not implemented)
-  // 1 = Normal, 2 = Just Duos, 3 = No Solos, 4 = Huge Groups, 5 = Symmetric Groups
+  if (newBoardOptions[1] > 7) newBoardOptions[1] = 0; // [1] is group options (default 1)
+  // 1 = Normal, 2 = Mostly Duos, 3 = Mostly Trios, 4 = No Solos, 5 = Large Groups, 6 = Huge Groups, 7 = Symmetric Groups
   // For all non-zero options, set those as the current board options
-  newBoardOptions.forEach((thisNum,i) => { if (thisNum) currentBoardOptions[i] = thisNum; });
+  newBoardOptions.forEach( (thisNum,i) => currentBoardOptions[i] = thisNum || currentBoardOptions[i] );
   const allOperatorsToGive = allOperatorsOptions[currentBoardOptions[2]]; // Second last digit is operator options (default 1)
   boardSize = currentBoardOptions[3]; // Final digit is board size (must be between 3 and 9)
 
@@ -302,11 +302,19 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
 
   //region .      Groups
   let thisGroup = 100;
-  const maxGroupSize = maxGroupSizeForBoardSize[boardSize];
-  initializeGroups(0.4,0.2);
-  initializeGroups(1,0.3);
-  const soloMergeChance = ( allOperatorsToGive.includes(0) ? 0.6 + boardSize/30 : 1 );
-  finalizeGroups(soloMergeChance);
+  const clustering = {
+    max:   maxGroupSizeForBoardSize[boardSize], // Maximum group size
+    merge: 0.3, // Merge rate of solos and duos
+    solo:  0.6 + boardSize/30, // Final merge rate of solos
+  };
+  if (currentBoardOptions[1] == 2) { clustering.max = 2; clustering.solo = 1; }
+  if (currentBoardOptions[1] == 3) { clustering.max = 3; clustering.merge = 1.0; clustering.solo = 1; }
+  if (currentBoardOptions[1] == 4) { clustering.solo = 1; }
+  if (currentBoardOptions[1] == 5) { clustering.max = 5; clustering.merge = 0.6; clustering.solo = 1; }
+  if (currentBoardOptions[1] == 6) { clustering.max = 6; clustering.merge = 0.9; clustering.solo = 1; }
+  initializeGroups(0.5,clustering.merge/2);
+  initializeGroups(1,clustering.merge);
+  finalizeGroups(clustering.solo);
 
   // inQuadrant = cells.filter(c => c.row < boardSize/2 && c.col < boardSize/2);
   // inQuadrant.forEach(thisCell => {
@@ -330,7 +338,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
   //   const rotatedCell = cells[ boardSize-1-thisCell.row + thisCell.col * boardSize ];
   //   return ( rotations > 1 ? getRotatedCell(rotatedCell,rotations-1) : ( rotations == 0 ? thisCell : rotatedCell ) );
   // }
-  // finalizeGroups(0);
+  // finalizeGroups(0); // Merge nearby solo cells with each other, but not into random nearby groups
 
   sequentializeGroups();
   function initializeGroups(assignChance = 1, mergeChance = 0) { // Cluster the cells into groups **************
@@ -349,7 +357,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
             const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
             const targetGroup = cells[partnerIndex].group;
             const groupSize = cells.filter(cell => cell.group === targetGroup).length;
-            if (groupSize < maxGroupSize && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
+            if (groupSize < clustering.max && getRandom() < mergeChance**(groupSize-2)) { // Less likely to form huge groups
               thisCell.group = targetGroup;
             }
           }
@@ -387,7 +395,7 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
           cells[partnerIndex].group = thisCell.group;
         } else if (getRandom() < soloMergeChance) { // Chance to merge current solo cell into group of an adjacent cell
           // Partner must have an assigned group, which is not already at max size
-          const mergeableIndexes = partners.filter(i => i != -1 && cells[i].group && cells.filter(c => c.group === cells[i].group).length < maxGroupSize);
+          const mergeableIndexes = partners.filter(i => i != -1 && cells[i].group && cells.filter(c => c.group === cells[i].group).length < clustering.max);
           if (mergeableIndexes.length) { // If there is a valid partner
             const partnerIndex = mergeableIndexes[Math.floor(getRandom() * mergeableIndexes.length)];
             const targetGroup = cells[partnerIndex].group;
@@ -826,7 +834,7 @@ function validateBoard() { // Validates the current board to ensure there is onl
     "\nTotal Nodes Searched:",totalNodeCount,
     "\nSolutions Found:",solutionsFound);
   // Return a failure if multiple solutions have been found, or a success if the board is valid
-  return ( failedGeneration ? "Multiple solutions found" : "success" );
+  return ( failedGeneration ? "Multiple solutions found" : ( solutionsFound.length ? "success" : "No solution found" ) );
 }
 
 // region Randomizer
@@ -909,7 +917,7 @@ function adjustLayout() {
   const newIsMobile = (width <= 768);
   const minFullAxis = Math.min(height,width);
   // Using initial dimensions of screen, calculate size of UI elements
-  const inputButtonDimensions = ~~Math.max(40, Math.min(80, minFullAxis*0.1)*boardSize/(boardSize+1));
+  const inputButtonDimensions = ~~Math.max(30, Math.min(80, minFullAxis*0.1)*boardSize/(boardSize+1));
   style.setProperty("--input-size", `${inputButtonDimensions}px`);
   const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+10);
   style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
