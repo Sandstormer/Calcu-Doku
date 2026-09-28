@@ -366,7 +366,13 @@ div {
   user-select: none;
   cursor: pointer;
 }
-.pencil-button {
+#pencil-container:hover .pencil-button {
+  border: 3px solid rgb(140, 130, 240);
+}
+#pencil-container:hover .pencil-button-yellow {
+  border: 3px solid rgb(240, 230, 140);
+}
+.pencil-button, .pencil-button-yellow {
   display: flex;
   align-items: center;
   justify-content: center;

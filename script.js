@@ -1038,10 +1038,10 @@ function updateCellHighlight(newClickTarget = clickTarget, isHover = false, isCl
   });
   updatePencilDisplay();
 }
-function updatePencilDisplay(isHover = false) {
-  pencilContainer.innerHTML = `<div class="pencil-button">
-    <span class="pencil-box">${isPencilMode ? "✔" : ""}</span>
-    <span class="pencil-text" style="color:${isPencilMode ? color.yellow : ( isHover ? color.lightPurple : color.cell )};">Pencil Mode</span>
+function updatePencilDisplay() {
+  pencilContainer.innerHTML = `<div class="pencil-button${ isPencilMode ? "-yellow" : "" }">
+    <span class="pencil-box">${ isPencilMode ? "✔" : "" }</span>
+    <span class="pencil-text" style="color:${ isPencilMode ? color.yellow : color.cell };">Pencil Mode</span>
   </div>`;
 }
 function togglePencilMode() {
@@ -1140,6 +1140,4 @@ function resetBoardState() {
     saveUndoState();
   }
 }
-pencilContainer.addEventListener("click",     () => togglePencilMode());
-pencilContainer.addEventListener("mouseover", () => updatePencilDisplay(true));
-pencilContainer.addEventListener("mouseout",  () => updatePencilDisplay());
+pencilContainer.addEventListener("click", () => togglePencilMode());
