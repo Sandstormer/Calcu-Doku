@@ -30,8 +30,8 @@ let rollingSeed = getDailySeed(); // Daily seed
 
 let boardSize = 4;
 let currentBoardOptions = ['1','1','1',boardSize];
-
 let cellDimensions = 100; // Pixel size of each cell
+
 const maxGroupSizeForBoardSize = { 3:3, 4:3, 5:4, 6:4, 7:5, 8:5, 9:5 };
 const allOperatorsOptions = {
   // key = third digit in board options code ( i.e. ##1# )
@@ -159,7 +159,10 @@ function exportBoardToString() {
   });
   return exportedString;
 }
+// importBoardFromString('d1d1d6d1b9c6c36c15d6b14b20a2b10a4b18c30d3e2b9c30d4aabcdeeffbcdghifjkgghiljkkmmnojkppqoorsppqttrssuu')
 function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") {
+  menuContainer.classList.add("hidden");
+  gameContainer.classList.remove("hidden");
   // Decode the imported string, to get data of groups and cells
   const pairs = [...importedString.matchAll(/[a-z]+\d+/g)].map(m => m[0]);
   operatorByGroup = pairs.map( thisPair => [...characterMap].findIndex(i => i == thisPair[0]) );
@@ -174,7 +177,7 @@ function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") 
   });
   groupList = [...Object.values(foundChars)];
   boardSize = ~~(importedCellGroups.length ** 0.5);
-  if (importedCellGroups.length != boardSize**2) returnToMainMenu("Incomplete cell data");
+  if (importedCellGroups.length != boardSize ** 2) returnToMainMenu("Incomplete cell data");
   seed.startTime = Date.now();
   // Create the cell elements, based on the data
   cells = []; // Clear all cell info
@@ -419,9 +422,8 @@ function generateAndValidateBoard(seedOrBoardOptions = null, isRetry = false) {
       }
     });
     groupList = [...Array(thisGroup).keys()];
+    cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup));
   }
-  
-  cellsByGroup = groupList.map(thisGroup => cells.filter(c => c.group == thisGroup));
   logToConsole("Finished assigning groups. Current time is",Date.now()-seed.startTime,"ms.","\nCells by Group:",cellsByGroup);
   
   // Check for square degeneracies of numbers, i.e two adjacent groups that are like [ 1 , 3 ]
@@ -529,7 +531,7 @@ function validateBoard() { // Validates the current board to ensure there is onl
   const cellsByColumn = allIndexes.map(i => cells.filter(c => c.col == i));
   cells.forEach(thisCell => {
     if (thisCell.operator == 0) {
-      thisCell.candidates = [thisCell.value];
+      thisCell.candidates = [thisCell.result];
     } else {
       thisCell.candidates = allNumsToGive.filter(i => thisCell.impactedCells.every(c => c.value != i));
       if (thisCell.operator == 2) // For multiply operators, candidates have to be divisible
