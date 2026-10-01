@@ -48,13 +48,13 @@ const allOperatorsOptions = {
 }
 const menuBoardOptions = [
   [
-    [1113,"3×3","Very Easy"], [1114,"4×4","Easy"], [1115,"5×5","Easy"]
+    ["1113","3×3","Very Easy"], ["1114","4×4","Easy"], ["1115","5×5","Easy"]
   ],
   [
-    [1176,"6×6 Mult","Medium"], [1116,"6×6","Medium"], [1166,"6×6 Plus","Hard"]
+    ["1176","6×6 Mult","Medium"], ["1116","6×6","Medium"], ["1166","6×6 Plus","Hard"]
   ],
   [
-    [1117,"7×7","Hard"], [1118,"8×8","Very Hard"], [1119,"9×9","Very Hard"]  
+    ["1117","7×7","Hard"], ["1118","8×8","Very Hard"], ["1119","9×9","Very Hard"]  
   ]
 ];
 const color = {
@@ -67,6 +67,11 @@ const color = {
   "Hard":      'rgb(240,170,100)',
   "Very Hard": 'rgb(250,110,110)',
 };
+
+let savedPuzzles = JSON.parse(localStorage.getItem("savedPuzzles")) ?? {};
+for (const savedSeed in savedPuzzles) { // Delete saved puzzles that are more than 60 days old
+  if (savedPuzzles[savedSeed].latestDate < getDailySeed(-60)) delete savedPuzzles[savedSeed];
+}
 
 //region Main Menu
 adjustLayout(); // Initial adjustment of layout
@@ -99,7 +104,7 @@ menuBoardOptions.forEach( (buttonsInRow,row) => { // Create the main menu button
       <span class="${ isMobile ? "thin-shadow" : "thick-shadow" }" style="color:${color[buttonOptions[2]]};">${buttonOptions[2]}</span>
     `);
     newButton.append(buttonCells,buttonTitle);
-    newButton.addEventListener('click', () => generateAndValidateBoard(getDailySeed(buttonOptions[0])));
+    newButton.addEventListener('click', () => enterBoardFromMainMenu(getDailySeed() + String(buttonOptions[0])));
     newRow.appendChild(newButton);
   });
   menuButtonContainer.appendChild(newRow);
@@ -109,6 +114,19 @@ function returnToMainMenu(errorString = null) {
   if (errorString) console.error(errorString);
   menuContainer.classList.remove("hidden");
   gameContainer.classList.add("hidden");
+}
+function enterBoardFromMainMenu(newSeed) {
+  if (newSeed in savedPuzzles) {
+    importBoardFromString(savedPuzzles[newSeed].puzzleString, false);
+    seed.reference = newSeed;
+    savedPuzzles[newSeed].savedValues.forEach( (i,thisIndex) => cells[thisIndex].value = i );
+    savedPuzzles[newSeed].savedCandidates.forEach( (i,thisIndex) => cells[thisIndex].candidates = [...i] );
+    states.undo = savedPuzzles[newSeed].savedUndoStates;
+    updateCellDisplay();
+  } else {
+    generateAndValidateBoard(newSeed);
+    seed.reference = newSeed;
+  }
 }
 
 //region Utility Functions
@@ -160,7 +178,7 @@ function exportBoardToString() {
   return exportedString;
 }
 // importBoardFromString('d1d1d6d1b9c6c36c15d6b14b20a2b10a4b18c30d3e2b9c30d4aabcdeeffbcdghifjkgghiljkkmmnojkppqoorsppqttrssuu')
-function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") {
+function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef", isVerifying = true) {
   menuContainer.classList.add("hidden");
   gameContainer.classList.remove("hidden");
   // Decode the imported string, to get data of groups and cells
@@ -209,20 +227,24 @@ function importBoardFromString(importedString = "c3c8b9b9c6d3abbcaaccddefdeef") 
   // Error checking on imported board
 
   // Validate the imported board
-  const validationResult = validateBoard(seed.startTime);
-  if (validationResult != "success") { // If there were no solutions or multiple solutions
-    returnToMainMenu(`Error with imported board: ${validationResult}`);
+  if (isVerifying) {
+    const validationResult = validateBoard(seed.startTime);
+    if (validationResult != "success") { // If there were no solutions or multiple solutions
+      returnToMainMenu(`Error with imported board: ${validationResult}`);
+    }
+    logToConsole("Verified solution in",Date.now()-seed.startTime,"ms.");
+    cells.forEach(thisCell => {
+      if (isDebugMode) newCell.answer = newCell.value;
+      else thisCell.candidates = []; // Hide candidates
+      thisCell.value = 0; // Hide the cell values
+    });
+    seed.reference = importedString;
+    states.undo = [];
+    saveUndoState();
   }
-  console.log("Finished import of board with string",importedString,"\nVerified solution in",Date.now()-seed.startTime,"ms.");
-  cells.forEach(thisCell => {
-    if (isDebugMode) newCell.answer = newCell.value;
-    else thisCell.candidates = []; // Hide candidates
-    thisCell.value = 0; // Hide the cell values
-  });
+  console.log("Finished import of board with string",importedString);
 
   clickTarget = null;
-  states.undo = [];
-  saveUndoState();
   updateCellDisplay();
 }
 
@@ -854,13 +876,13 @@ function initializePRNG(forcedSeed = null) { // Mulberry 32 algorithm for RNG
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
 }
-function getDailySeed(seedOffset = 7777) { // Get a reliable seed for the day
-  if (seedOffset > 9999) console.error("Seed Offset can't be greater than 9999.");
-  const d = new Date();                    // seedOffset (up to 9999) specifies board options
+function getDailySeed(dayOffset = 0) { // Get the date in a consistent format
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
   const year = String(d.getYear()).padStart(3,0); // Three digit year (since 1900)
   const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-11
   const day = String(d.getDate()).padStart(2, '0'); // Two digit day of the month
-  return parseInt(`${year}${month}${day}${String(seedOffset).slice(-4).padStart(4,0)}`, 10);
+  return parseInt(`${year}${month}${day}`, 10);
 }
 
 //region Helper Functions
@@ -1116,18 +1138,29 @@ function tryToEnterNumber(thisNum) {
 function saveUndoState() {
   states.undo.push({
     values: cells.map(c => c.value),
-    candidates: cells.map(c => c.candidates),
-    clickTarget: clickTarget,
+    candidates: cells.map(c => c.candidates)
   });
+  if (seed.full in savedPuzzles || states.undo.length > 1) {
+    savePuzzleState(); // Only save puzzles that are started or already saved
+  }
 }
 function loadUndoState() {
   if (states.undo.length > 1) {
-    const stateToRecover = states.undo[states.undo.length-2];
+    states.undo.pop();
+    const stateToRecover = states.undo[states.undo.length-1];
+    let newClickTarget = null;
     cells.forEach( (thisCell,thisIndex) => {
-      thisCell.value = stateToRecover.values[thisIndex];
+      const newValue = stateToRecover.values[thisIndex];
+      if (thisCell.value != newValue) {
+        thisCell.value = newValue;
+        if (cells.some( c => c.value != 0 || c.candidates.length != 0 )) {
+          newClickTarget = thisCell; // Highlight the cell that changed, except when undoing a full clear
+        }
+      }
       thisCell.candidates = [...stateToRecover.candidates[thisIndex]];
     });
-    updateCellDisplay(states.undo.pop().clickTarget);
+    updateCellDisplay(newClickTarget);
+    savePuzzleState();
   }
 }
 function resetBoardState() {
@@ -1139,5 +1172,15 @@ function resetBoardState() {
     updateCellDisplay(null);
     saveUndoState();
   }
+}
+function savePuzzleState() {
+  savedPuzzles[seed.reference] = {
+    latestDate: getDailySeed(),
+    puzzleString: exportBoardToString(),
+    savedValues: cells.map( c => c.value ),
+    savedCandidates: cells.map( c => c.candidates ),
+    savedUndoStates: states.undo,
+  };
+  localStorage.setItem("savedPuzzles",JSON.stringify(savedPuzzles));
 }
 pencilContainer.addEventListener("click", () => togglePencilMode());
