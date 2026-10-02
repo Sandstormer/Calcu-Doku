@@ -65,7 +65,7 @@ div {
   display: flex;
   border: 4px solid #EEEEEE;
   border-radius: 4px;
-  margin: 6px;
+  margin: calc(2px + 0.25 * var(--border-size));
   background-color: black;
   min-height: 50px;
   align-items: center;
@@ -165,7 +165,6 @@ div {
 
 /* Game View - including game board, cells, and all input buttons */
 #game-container {
-  padding: var(--border-size);
   overflow-x: hidden;
   margin: auto;
 }
@@ -179,10 +178,8 @@ div {
   height: var(--board-size);
   width: var(--board-size);
   background-color: #E0E0E0;
-  border: 6px solid black;
-  outline: var(--border-size) solid #29262D;
-  margin-top: var(--border-size);
-  border-radius: 1px;
+  border: calc(6px + var(--border-size)) solid #29262D;
+  border-radius: var(--border-size);
   gap: 6px;
 }
 .row {
@@ -206,22 +203,19 @@ div {
   cursor: pointer;
 }
 .cell-value {
-  font-size: 80px;
   line-height: 100%;
   margin: auto;
   user-select: none;
   pointer-events: none;
 }
 .mod-text {
-  font-size: 34px;
   position: absolute;
   top: 5%;
-  left: 5%;
+  left: 6%;
   user-select: none;
   pointer-events: none;
 }
 .candidates {
-  font-size: 30px;
   position: absolute;
   text-align: right;
   top: 97%;
@@ -327,7 +321,7 @@ div {
   width: max-content;
   background-color: #171619;
   border-radius: 0px 0px 8px 8px;
-  margin: var(--border-size) auto auto;
+  margin: auto;
   gap: calc(4px + 0.5*var(--border-size));
   padding: 11px;
   max-width: calc(0.95*var(--board-size));
