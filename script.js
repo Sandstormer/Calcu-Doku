@@ -940,21 +940,22 @@ window.addEventListener("resize", adjustLayout); // Run on page load and when re
 function adjustLayout() {
   const [height,width,style] = [document.documentElement.clientHeight,document.documentElement.clientWidth,document.documentElement.style];
   const newIsMobile = (width <= 768);
-  const minFullAxis = Math.min(height,width);
+  const minFullAxis = Math.min( height/1.4, width );
   // Using initial dimensions of screen, calculate size of UI elements
   const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+10);
   style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
   const outerBorderDimensions = ~~(minFullAxis*0.015)+8;
   style.setProperty("--border-size", `${outerBorderDimensions}px`);
-  const inputButtonDimensions = ~~Math.max(30, Math.min(75, minFullAxis*0.12, (minFullAxis*0.85 - boardSize*0.5*outerBorderDimensions) / (boardSize+1) - 8 ));
+  const inputButtonDimensions = ~~Math.max(30, Math.min(75, minFullAxis*0.1, (minFullAxis*0.85 - boardSize*0.5*outerBorderDimensions) / (boardSize+1) - 8 ));
   style.setProperty("--input-size", `${inputButtonDimensions}px`);
   const viewFillRatioW = Math.max( 0.85, Math.min( 1, 1.35 -  width * 0.0005 )); // Up to 15% w margin on large screens
-  const viewFillRatioH = Math.max( 0.91, Math.min( 1, 1.21 - height * 0.0003 )); // Up to  9% h margin on large screens
+  const viewFillRatioH = Math.max( 0.91, Math.min( 1, 1.25 - height * 0.0003 )); // Up to  9% h margin on large screens
   // Subtract size of UI elements from screen to determine remaining space left for board
-  const minScreenAxis = Math.min( width * viewFillRatioW,
-    (height-inputButtonDimensions-pencilButtonDimensions-70)*viewFillRatioH);
-  const innerBorderTotalDimensions = 2*(boardSize+1);
-  const newCellDimensions = Math.max( ~~( (minScreenAxis-innerBorderTotalDimensions-2*outerBorderDimensions+12)/boardSize ) - 4, 30);
+  const minBoardAxis = Math.min(
+    width * viewFillRatioW + 12,
+    (height-inputButtonDimensions-2.5*pencilButtonDimensions-100) * viewFillRatioH
+  )-2*(boardSize+1)-2*outerBorderDimensions; // Subtract inner cell borders and outer board border
+  const newCellDimensions = Math.max( ~~( minBoardAxis / boardSize ) - 4, 30);
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
