@@ -28,7 +28,7 @@ let inputButtons = [];
 let clickTarget = null; // Which cell is selected for number entry
 let rollingSeed = getDailySeed(); // Daily seed
 
-let boardSize = 4;
+let boardSize = 2;
 let currentBoardOptions = ['1','1','1',boardSize];
 let cellDimensions = 100; // Pixel size of each cell
 
@@ -942,19 +942,19 @@ function adjustLayout() {
   const newIsMobile = (width <= 768);
   const minFullAxis = Math.min(height,width);
   // Using initial dimensions of screen, calculate size of UI elements
-  const inputButtonDimensions = ~~Math.max(30, Math.min(80, minFullAxis*0.1)*boardSize/(boardSize+1));
-  style.setProperty("--input-size", `${inputButtonDimensions}px`);
   const pencilButtonDimensions = ~~Math.min(30,minFullAxis*0.015+10);
   style.setProperty("--pencil-size", `${pencilButtonDimensions}px`);
-  const outerBorderDimensions = ~~(minFullAxis*0.015)+2;
+  const outerBorderDimensions = ~~(minFullAxis*0.015)+8;
   style.setProperty("--border-size", `${outerBorderDimensions}px`);
+  const inputButtonDimensions = ~~Math.max(30, Math.min(75, minFullAxis*0.12, (minFullAxis*0.85 - boardSize*0.5*outerBorderDimensions) / (boardSize+1) - 8 ));
+  style.setProperty("--input-size", `${inputButtonDimensions}px`);
   const viewFillRatioW = Math.max( 0.85, Math.min( 1, 1.35 -  width * 0.0005 )); // Up to 15% w margin on large screens
   const viewFillRatioH = Math.max( 0.91, Math.min( 1, 1.21 - height * 0.0003 )); // Up to  9% h margin on large screens
   // Subtract size of UI elements from screen to determine remaining space left for board
   const minScreenAxis = Math.min( width * viewFillRatioW,
-    (height-inputButtonDimensions-pencilButtonDimensions-3*outerBorderDimensions-28)*viewFillRatioH);
+    (height-inputButtonDimensions-pencilButtonDimensions-70)*viewFillRatioH);
   const innerBorderTotalDimensions = 2*(boardSize+1);
-  const newCellDimensions = Math.max( ~~( (minScreenAxis-innerBorderTotalDimensions-2*outerBorderDimensions)/boardSize ) - 4, 30);
+  const newCellDimensions = Math.max( ~~( (minScreenAxis-innerBorderTotalDimensions-2*outerBorderDimensions+12)/boardSize ) - 4, 30);
   if (newCellDimensions != cellDimensions || newIsMobile != isMobile) {
     cellDimensions = newCellDimensions;
     isMobile = newIsMobile;
@@ -962,8 +962,8 @@ function adjustLayout() {
     style.setProperty("--cell-size", `${cellDimensions}px`);
     style.setProperty("--row-size", `${cellDimensions+4}px`);
     style.setProperty("--board-size", `${cellDimensions*boardSize+6*(boardSize-1)}px`);
-    if ( boardContainer.offsetWidth + 2*(~~(cellDimensions/8)+10) > width) { // Shrink border if overflowing on width
-      style.setProperty("--border-size", `${~~((width - boardContainer.offsetWidth) / 2)}px`);
+    if ( boardContainer.offsetWidth > width ) { // Shrink border if overflowing on width
+      style.setProperty("--border-size", `${outerBorderDimensions - ~~((boardContainer.offsetWidth - width) / 2)}px`);
     }
     // Create all the buttons for number input
     inputContainer.innerHTML = "";

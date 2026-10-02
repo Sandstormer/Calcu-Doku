@@ -50,8 +50,8 @@ div {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: calc(var(--board-size) + 2 * var(--border-size));
-  width: calc(var(--board-size) + 2 * var(--border-size));
+  height: calc(var(--board-size) + var(--border-size));
+  width: calc(var(--board-size) + var(--border-size));
   overflow-x: hidden;
   margin: auto;
 }
@@ -65,7 +65,7 @@ div {
   display: flex;
   border: 4px solid #EEEEEE;
   border-radius: 4px;
-  margin: calc(2px + 0.25 * var(--border-size));
+  margin: calc(0.25 * var(--border-size));
   background-color: black;
   min-height: 50px;
   align-items: center;
@@ -178,8 +178,8 @@ div {
   height: var(--board-size);
   width: var(--board-size);
   background-color: #E0E0E0;
-  border: calc(6px + var(--border-size)) solid #29262D;
-  border-radius: var(--border-size);
+  border: var(--border-size) solid #29262D;
+  border-radius: calc(var(--border-size) - 6px);
   gap: 6px;
 }
 .row {
@@ -322,7 +322,7 @@ div {
   background-color: #171619;
   border-radius: 0px 0px 8px 8px;
   margin: auto;
-  gap: calc(4px + 0.5*var(--border-size));
+  gap: calc(0.5*var(--border-size));
   padding: 11px;
   max-width: calc(0.95*var(--board-size));
   user-select: none;
@@ -353,9 +353,7 @@ div {
   background-color: #171619;
   margin: auto;
   border-radius: 0px 0px 8px 8px;
-  gap: calc(0.5*var(--border-size));
-  padding: 12px;
-  padding-top: 0px;
+  padding: 0px 12px 12px;
   width: max-content;
   user-select: none;
   cursor: pointer;
